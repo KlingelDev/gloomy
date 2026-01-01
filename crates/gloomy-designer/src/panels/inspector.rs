@@ -29,6 +29,9 @@ pub fn create_property_widgets(
             
             // Show properties based on widget type
             match w {
+                Widget::Icon { .. } => {
+                    children.push(Widget::label("Type: Icon"));
+                }
                 Widget::Container { 
                     id, width, height, background, padding, ..
                 } => {

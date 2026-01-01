@@ -155,12 +155,17 @@ impl DesignerApp {
             width: None,
             height: None,
             background: bg_color,
-            border_color: if is_selected { 
-                Some((0.8, 0.8, 0.8, 1.0)) // Light gray border
+            border: if is_selected { 
+                Some(gloomy_core::widget::Border {
+                    width: 2.0,
+                    color: (0.8, 0.8, 0.8, 1.0).into(),
+                    ..Default::default()
+                })
             } else { 
                 None 
             },
-            border_width: if is_selected { 2.0 } else { 0.0 },
+            gradient: None,
+            shadow: None,
             corner_radius: 4.0,
             corner_radii: None,
             padding: 4.0,
@@ -182,8 +187,9 @@ impl DesignerApp {
                     background: (0.0, 0.0, 0.0, 0.0),
                     hover_color: (1.0, 1.0, 1.0, 0.05),
                     active_color: (1.0, 1.0, 1.0, 0.1),
-                    border_width: 0.0,
-                    border_color: None,
+                    border: None,
+                    gradient: None,
+                    shadow: None,
                     corner_radius: 0.0,
                     corner_radii: None,
                     layout: Layout::default(),
@@ -245,6 +251,7 @@ impl DesignerApp {
             Widget::Slider { .. } => "Slider",
             Widget::Spacer { .. } => "Spacer",
             Widget::Image { .. } => "Image",
+            Widget::Icon { .. } => "Icon",
         }
     }
 
@@ -260,8 +267,9 @@ impl DesignerApp {
             width: None,
             height: None,
             background: Some((0.15, 0.15, 0.15, 1.0)), // Flat dark gray
-            border_color: None,
-            border_width: 0.0,
+            border: None,
+            gradient: None,
+            shadow: None,
             corner_radius: 0.0,
             corner_radii: None,
             padding: 0.0,
@@ -299,8 +307,9 @@ impl DesignerApp {
             width: Some(200.0),
             height: None,
             background: Some((0.12, 0.12, 0.12, 1.0)), // Flat dark gray
-            border_color: None,
-            border_width: 0.0,
+            border: None,
+            gradient: None,
+            shadow: None,
             corner_radius: 0.0,
             corner_radii: None,
             padding: 8.0,
@@ -326,8 +335,9 @@ impl DesignerApp {
             width: None,
             height: None,
             background: None,
-            border_color: None,
-            border_width: 0.0,
+            border: None,
+            gradient: None,
+            shadow: None,
             corner_radius: 0.0,
             corner_radii: None,
             padding: 0.0,
@@ -348,8 +358,9 @@ impl DesignerApp {
                     width: None,
                     height: None,
                     background: Some((0.1, 0.1, 0.1, 1.0)), // Flat dark gray
-                    border_color: None,
-                    border_width: 0.0,
+                    border: None,
+                    gradient: None,
+                    shadow: None,
                     corner_radius: 0.0,
                     corner_radii: None,
                     padding: 16.0,
@@ -374,8 +385,9 @@ impl DesignerApp {
                     width: None,
                     height: Some(150.0),
                     background: Some((0.1, 0.1, 0.1, 1.0)),
-                    border_color: None,
-                    border_width: 0.0,
+                    border: None,
+                    gradient: None,
+                    shadow: None,
                     corner_radius: 0.0,
                     corner_radii: None,
                     padding: 8.0,
@@ -406,8 +418,9 @@ impl DesignerApp {
             width: Some(250.0),
             height: None,
             background: Some((0.12, 0.12, 0.12, 1.0)),
-            border_color: None,
-            border_width: 0.0,
+            border: None,
+            gradient: None,
+            shadow: None,
             corner_radius: 0.0,
             corner_radii: None,
             padding: 8.0,

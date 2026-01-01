@@ -76,6 +76,17 @@ impl GloomyWindow {
     let view =
       output.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
+    // Check for size mismatch (e.g. if window system gave us different size than configured)
+    let width = output.texture.width();
+    let height = output.texture.height();
+    if width != self.config.width || height != self.config.height {
+        log::warn!("Surface size mismatch! Config: {}x{}, Texture: {}x{}. Resizing renderer.", 
+                   self.config.width, self.config.height, width, height);
+        self.config.width = width;
+        self.config.height = height;
+        self.renderer.resize(queue, width, height);
+    }
+
     self.renderer.prepare(device, queue);
 
     let mut encoder =

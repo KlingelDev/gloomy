@@ -119,6 +119,25 @@ impl GloomyRenderer {
     (&mut self.primitives, &mut self.text, &mut self.images, &mut self.textures)
   }
 
+  /// Adds a new font to the renderer.
+  pub fn add_font(&mut self, name: &str, font_bytes: &[u8]) {
+    self.text.add_font(name, font_bytes);
+  }
+
+  /// Draws text at the specified position with an optional font.
+  pub fn draw_text_with_font(
+    &mut self,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    text: &str,
+    pos: Vec2,
+    size: f32,
+    color: Vec4,
+    font_name: Option<&str>,
+  ) {
+    self.text.draw(device, queue, text, pos, size, color, wgpu_text::glyph_brush::HorizontalAlign::Left, font_name);
+  }
+
   /// Draws text at the specified position.
   pub fn draw_text(
     &mut self,
@@ -129,7 +148,7 @@ impl GloomyRenderer {
     size: f32,
     color: Vec4,
   ) {
-    self.text.draw(device, queue, text, pos, size, color);
+    self.text.draw(device, queue, text, pos, size, color, wgpu_text::glyph_brush::HorizontalAlign::Left, None);
   }
 
   /// Sets the clear color for the background.

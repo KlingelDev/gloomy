@@ -1,0 +1,44 @@
+// Modern style configuration
+GlobalStyle(
+    // Border radii
+    corner_radius_small: 4.0,
+    corner_radius_medium: 8.0,
+    corner_radius_large: 12.0,
+    
+    // Border widths
+    border_width_thin: 1.0,
+    border_width_normal: 2.0,
+    border_width_thick: 3.0,
+    
+    // Spacing
+    spacing_small: 8.0,
+    spacing_medium: 16.0,
+    spacing_large: 24.0,
+    
+    // Shadows
+    shadow_small: Some((
+        offset: (0.0, 2.0),
+        blur: 4.0,
+        color: (0.0, 0.0, 0.0, 0.1),
+    )),
+    shadow_medium: Some((
+        offset: (0.0, 4.0),
+        blur: 8.0,
+        color: (0.0, 0.0, 0.0, 0.15),
+    )),
+    shadow_large: Some((
+        offset: (0.0, 8.0),
+        blur: 16.0,
+        color: (0.0, 0.0, 0.0, 0.2),
+    )),
+    
+    // Typography
+    font_size_small: 12.0,
+    font_size_normal: 16.0,
+    font_size_large: 20.0,
+    font_size_heading: 28.0,
+    
+    // Gradients
+    gradient_primary: None,
+    gradient_secondary: None,
+)

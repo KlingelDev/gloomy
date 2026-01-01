@@ -1,0 +1,32 @@
+// Light theme configuration
+Theme(
+    name: "Light",
+    colors: ColorPalette(
+        // Base colors
+        background: (0.98, 0.98, 0.98, 1.0),
+        surface: (1.0, 1.0, 1.0, 1.0),
+        primary: (0.2, 0.4, 0.9, 1.0),
+        secondary: (0.4, 0.2, 0.9, 1.0),
+        accent: (0.9, 0.4, 0.1, 1.0),
+        
+        // Text colors
+        text: (0.1, 0.1, 0.1, 1.0),
+        text_secondary: (0.4, 0.4, 0.4, 1.0),
+        text_disabled: (0.6, 0.6, 0.6, 1.0),
+        
+        // Interactive states
+        hover: (0.95, 0.95, 0.95, 1.0),
+        active: (0.9, 0.9, 0.9, 1.0),
+        focus: (0.2, 0.4, 0.9, 0.3),
+        
+        // Semantic colors
+        success: (0.1, 0.6, 0.2, 1.0),
+        warning: (0.9, 0.5, 0.1, 1.0),
+        error: (0.8, 0.1, 0.1, 1.0),
+        info: (0.1, 0.5, 0.9, 1.0),
+        
+        // Borders
+        border: (0.8, 0.8, 0.8, 1.0),
+        divider: (0.85, 0.85, 0.85, 1.0),
+    ),
+)

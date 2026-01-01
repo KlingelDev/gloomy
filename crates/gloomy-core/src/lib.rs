@@ -22,6 +22,9 @@ pub mod texture;
 pub mod ui;
 pub mod widget;
 pub mod svg_loader;
+pub mod theme;
+pub mod style;
+pub mod style_context;
 
 pub use container::Container;
 pub use glam::{Vec2, Vec4};
@@ -36,3 +39,6 @@ pub use ui::{
   hit_test, load_ui, parse_ui, render_ui, RenderContext,
 };
 pub use widget::{Widget, WidgetBounds};
+pub use theme::{Theme, ColorPalette};
+pub use style::GlobalStyle;
+pub use style_context::StyleContext;

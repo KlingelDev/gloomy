@@ -87,14 +87,7 @@ fn main() -> anyhow::Result<()> {
       // Clear before drawing? win.render does clear.
       // We assume render_ui just adds to primitives.
 
-      render_ui(
-        &s.ui, 
-        prims, 
-        text, 
-        ctx.device, 
-        ctx.queue, 
-        Some(&s.interaction)
-      );
+      render_ui(&s.ui, &mut win.renderer, ctx.device, ctx.queue, Some(&s.interaction));
     })
     .run();
 

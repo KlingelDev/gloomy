@@ -1,7 +1,7 @@
 //! Layout engine for recalculating widget bounds.
 
 use crate::layout::{Align, Direction, Justify, TrackSize};
-use crate::widget::Widget;
+use crate::widget::{Widget, Orientation};
 
 /// Computes the layout for a widget tree.
 pub fn compute_layout(
@@ -423,11 +423,16 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::Button { flex, .. } => *flex,
     Widget::Label { flex, .. } => *flex,
     Widget::TextInput { flex, .. } => *flex,
-    Widget::Spacer { flex, .. } => *flex,
+    Widget::Spacer { .. } => 0.0,
+    Widget::Divider { .. } => 0.0,
     Widget::Checkbox { flex, .. } => *flex,
     Widget::Slider { flex, .. } => *flex,
     Widget::Image { flex, .. } => *flex,
     Widget::Icon { flex, .. } => *flex,
+    Widget::ToggleSwitch { flex, .. } => *flex,
+    Widget::ProgressBar { flex, .. } => *flex,
+    Widget::RadioButton { flex, .. } => *flex,
+    Widget::Dropdown { flex, .. } => *flex,
   }
 }
 
@@ -435,13 +440,10 @@ fn get_flex(widget: &Widget) -> f32 {
 fn get_fixed_size(widget: &Widget) -> (f32, f32) {
   match widget {
     Widget::Container { bounds, width, height, padding, children, .. } => {
-        // If explicit width/height specified, use those
         let mut w = width.unwrap_or(0.0);
         let mut h = height.unwrap_or(0.0);
         
-        // If not specified, try to compute from children
         if w <= 0.0 && !children.is_empty() {
-            // Sum widths for Row, max widths for Column
             let mut max_w = 0.0f32;
             for child in children {
                 let (cw, _) = get_fixed_size(child);
@@ -451,7 +453,6 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         }
         
         if h <= 0.0 && !children.is_empty() {
-            // Sum heights for Column, max heights for Row
             let mut max_h = 0.0f32;
             for child in children {
                 let (_, ch) = get_fixed_size(child);
@@ -460,7 +461,6 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
             h = max_h + padding * 2.0;
         }
         
-        // Fallback to bounds if still zero
         if w <= 0.0 { w = bounds.width; }
         if h <= 0.0 { h = bounds.height; }
         
@@ -472,36 +472,64 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         (w, h)
     },
     Widget::Icon { size, .. } => (*size, *size),
-    Widget::Button { bounds, text, .. } => {
-        // If bounds are set, use them. Otherwise estimate.
+    Widget::Button { bounds, text, font, .. } => {
         if bounds.width > 0.0 && bounds.height > 0.0 {
             (bounds.width, bounds.height)
         } else {
-             // 16px font, padding 10px H, 5px V
-             let w = text.len() as f32 * 16.0 * 0.6 + 20.0;
-             let h = 16.0 + 10.0;
+             // We don't have a renderer here, so we'll use a slightly better estimation
+             // or ideally we should pass a measurement closure or have a global font cache access.
+             // For now, let's keep the estimation but acknowledge the font.
+             let w = text.len() as f32 * 10.0 + 20.0;
+             let h = 30.0;
              (w, h)
         }
     },
-    Widget::Label { size, text, .. } => {
-      // Rough estimation for text size if not set manually
-      // roughly 0.6 * size per char width, size height
-      let w = text.len() as f32 * size * 0.6;
-      (w, *size)
-    }
+    Widget::Label { width, height, size, text, font, .. } => {
+        if *width > 0.0 && *height > 0.0 {
+           (*width, *height)
+        } else {
+           // Improved estimation: average character width is roughly 0.6 * size
+           let w = text.len() as f32 * size * 0.6;
+           (w, *size)
+        }
+    },
     Widget::TextInput { width, height, .. } => {
-        let w = if *width > 0.0 { *width } else { 200.0 }; // Default width
-        let h = if *height > 0.0 { *height } else { 32.0 }; // Default height
+        let w = if *width > 0.0 { *width } else { 200.0 };
+        let h = if *height > 0.0 { *height } else { 32.0 };
         (w, h)
-    }
+    },
     Widget::Spacer { size, .. } => (*size, *size),
+    Widget::Divider { orientation, thickness, margin, .. } => {
+      match orientation {
+        Orientation::Horizontal => (0.0, thickness + margin * 2.0),
+        Orientation::Vertical => (thickness + margin * 2.0, 0.0),
+      }
+    }
     Widget::Checkbox { size, .. } => (*size, *size),
-    Widget::Slider { width, track_height, thumb_radius, .. } => {
-          let h = (*thumb_radius * 2.0).max(*track_height);
+    Widget::Slider { width, style, .. } => {
+          let h = (style.thumb_radius * 2.0).max(style.track_height);
           let w = if *width > 0.0 { *width } else { 200.0 };
           (w, h)
     },
-
+    Widget::ToggleSwitch { style, .. } => {
+        let w = if style.width > 0.0 { style.width } else { 40.0 };
+        let h = if style.track_height > 0.0 { style.track_height.max(style.thumb_radius * 2.0) } else { 20.0 };
+        (w, h)
+    },
+    Widget::ProgressBar { width, height, style, .. } => {
+        let w = if let Some(w) = width { *w } else { 200.0 };
+        let h = if let Some(h) = height { *h } else { 20.0 };
+        (w, h.max(style.corner_radius * 2.0))
+    },
+    Widget::RadioButton { style, .. } => {
+        let s = if style.size > 0.0 { style.size } else { 20.0 };
+        (s, s)
+    },
+    Widget::Dropdown { width, height, .. } => {
+        let w = if let Some(w) = width { *w } else { 150.0 };
+        let h = if let Some(h) = height { *h } else { 32.0 };
+        (w, h)
+    },
   }
 }
 
@@ -524,7 +552,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
       bounds.width = w;
       bounds.height = h;
     }
-    Widget::Label { .. } => { /* Text usually auto-sizes */ }
+    Widget::Label { width: lw, height: lh, .. } => {
+        *lw = w;
+        *lh = h;
+    }
     Widget::TextInput { bounds, .. } => {
       bounds.width = w;
       bounds.height = h;
@@ -532,11 +563,40 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
     Widget::Spacer { size, .. } => {
       *size = w.max(h);
     }
+    Widget::Divider { bounds, orientation, thickness, margin, .. } => {
+      // Set bounds based on orientation
+      match orientation {
+        Orientation::Horizontal => {
+          bounds.width = w;
+          bounds.height = *thickness + *margin * 2.0;
+        }
+        Orientation::Vertical => {
+          bounds.width = *thickness + *margin * 2.0;
+          bounds.height = h;
+        }
+      }
+    }
     Widget::Checkbox { bounds, .. } => {
         bounds.width = w;
         bounds.height = h;
     }
     Widget::Slider { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
+    Widget::ToggleSwitch { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
+    Widget::ProgressBar { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
+    Widget::RadioButton { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
+    Widget::Dropdown { bounds, .. } => {
         bounds.width = w;
         bounds.height = h;
     }
@@ -571,6 +631,10 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
       bounds.y = y;
     }
     Widget::Spacer { .. } => {}
+    Widget::Divider { bounds, .. } => {
+      bounds.x = x;
+      bounds.y = y;
+    }
     Widget::Checkbox { bounds, .. } => {
         bounds.x = x;
         bounds.y = y;
@@ -579,8 +643,25 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
         bounds.x = x;
         bounds.y = y;
     }
+    Widget::ToggleSwitch { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
+    Widget::ProgressBar { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
+    Widget::RadioButton { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
+    Widget::Dropdown { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
   }
 }
+
 // Helper to get grid column (returns 0 if unset for auto-flow)
 fn get_grid_col(widget: &Widget) -> usize {
   match widget {
@@ -589,10 +670,15 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::Label { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::TextInput { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Spacer { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Divider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Checkbox { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Slider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Image { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Icon { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::ToggleSwitch { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::ProgressBar { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::RadioButton { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Dropdown { grid_col, .. } => grid_col.unwrap_or(0),
   }
 }
 
@@ -606,8 +692,13 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::Label { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::TextInput { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Spacer { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::Divider { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Checkbox { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Slider { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::ToggleSwitch { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::ProgressBar { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::RadioButton { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::Dropdown { grid_row, .. } => grid_row.unwrap_or(0),
   }
 }
 
@@ -620,10 +711,15 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::Label { grid_col, .. } => *grid_col,
     Widget::TextInput { grid_col, .. } => *grid_col,
     Widget::Spacer { grid_col, .. } => *grid_col,
+    Widget::Divider { grid_col, .. } => *grid_col,
     Widget::Checkbox { grid_col, .. } => *grid_col,
     Widget::Slider { grid_col, .. } => *grid_col,
     Widget::Image { grid_col, .. } => *grid_col,
     Widget::Icon { grid_col, .. } => *grid_col,
+    Widget::ToggleSwitch { grid_col, .. } => *grid_col,
+    Widget::ProgressBar { grid_col, .. } => *grid_col,
+    Widget::RadioButton { grid_col, .. } => *grid_col,
+    Widget::Dropdown { grid_col, .. } => *grid_col,
   }
 }
 
@@ -637,8 +733,13 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::Label { grid_row, .. } => *grid_row,
     Widget::TextInput { grid_row, .. } => *grid_row,
     Widget::Spacer { grid_row, .. } => *grid_row,
+    Widget::Divider { grid_row, .. } => *grid_row,
     Widget::Checkbox { grid_row, .. } => *grid_row,
     Widget::Slider { grid_row, .. } => *grid_row,
+    Widget::ToggleSwitch { grid_row, .. } => *grid_row,
+    Widget::ProgressBar { grid_row, .. } => *grid_row,
+    Widget::RadioButton { grid_row, .. } => *grid_row,
+    Widget::Dropdown { grid_row, .. } => *grid_row,
   }
 }
 
@@ -652,9 +753,13 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::Label { col_span, .. } => *col_span,
     Widget::TextInput { col_span, .. } => *col_span,
     Widget::Spacer { col_span, .. } => *col_span,
+    Widget::Divider { col_span, .. } => *col_span,
     Widget::Checkbox { col_span, .. } => *col_span,
     Widget::Slider { col_span, .. } => *col_span,
-
+    Widget::ToggleSwitch { col_span, .. } => *col_span,
+    Widget::ProgressBar { col_span, .. } => *col_span,
+    Widget::RadioButton { col_span, .. } => *col_span,
+    Widget::Dropdown { col_span, .. } => *col_span,
   }
 }
 
@@ -664,12 +769,16 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::Container { row_span, .. } => *row_span,
     Widget::Image { row_span, .. } => *row_span,
     Widget::Icon { row_span, .. } => *row_span,
-    Widget::Button { row_span, .. } => *row_span,
     Widget::Label { row_span, .. } => *row_span,
     Widget::TextInput { row_span, .. } => *row_span,
     Widget::Spacer { row_span, .. } => *row_span,
+    Widget::Divider { row_span, .. } => *row_span,
     Widget::Checkbox { row_span, .. } => *row_span,
     Widget::Slider { row_span, .. } => *row_span,
-
+    Widget::ToggleSwitch { row_span, .. } => *row_span,
+    Widget::ProgressBar { row_span, .. } => *row_span,
+    Widget::RadioButton { row_span, .. } => *row_span,
+    Widget::Button { row_span, .. } => *row_span,
+    Widget::Dropdown { row_span, .. } => *row_span,
   }
 }

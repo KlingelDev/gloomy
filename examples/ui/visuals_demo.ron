@@ -1,0 +1,70 @@
+
+        Container(
+            layout: (direction: Column, spacing: 10.0),
+            background: Some((0.15, 0.15, 0.18, 1.0)),
+            padding: 20.0,
+            children: [
+                Label(text: "Visual Polish Demo", size: 24.0, flex: 0.0, padding: 10.0),
+                Spacer(size: 20.0),
+                
+                // Shadow Demo
+                Container(
+                    width: Some(300.0),
+                    height: Some(100.0),
+                    background: Some((0.2, 0.2, 0.25, 1.0)),
+                    corner_radius: 8.0,
+                    shadow: Some(Shadow(
+                        offset: (0.0, 10.0),
+                        blur: 20.0,
+                        color: (0.0, 0.0, 0.0, 0.5)
+                    )),
+                    children: [
+                        Label(text: "Container with Drop Shadow", size: 18.0, text_align: Center)
+                    ]
+                ),
+                
+                Spacer(size: 40.0),
+                
+                // Gradient Button
+                Button(
+                    text: "Gradient Button",
+                    action: "grad_btn",
+                    bounds: (width: 200.0, height: 50.0),
+                    corner_radius: 25.0,
+                    gradient: Some(Gradient(
+                        start: (0.0, 0.4, 0.8, 1.0), // Blue
+                        end: (0.0, 0.2, 0.5, 1.0)    // Dark Blue
+                    )),
+                    shadow: Some(Shadow(
+                        offset: (0.0, 5.0),
+                        blur: 10.0,
+                        color: (0.0, 0.0, 0.0, 0.4)
+                    ))
+                ),
+                
+                Spacer(size: 40.0),
+                
+                 // Soft Border / Glow
+                Container(
+                    width: Some(300.0),
+                    height: Some(100.0),
+                    background: Some((0.1, 0.1, 0.1, 1.0)),
+                    border: Some(Border(
+                        width: 2.0,
+                        color: (1.0, 0.5, 0.0, 1.0),
+                        style: Solid
+                    )),
+                    corner_radius: 12.0,
+                    // Simulate glow with shadow?
+                    shadow: Some(Shadow(
+                        offset: (0.0, 0.0),
+                        blur: 15.0,
+                        color: (1.0, 0.5, 0.0, 0.3)
+                    )),
+                    children: [
+                         Label(text: "Glow Effect (Shadow + Border)", size: 16.0, text_align: Center)
+                    ]
+                ),
+            ]
+        )
+    

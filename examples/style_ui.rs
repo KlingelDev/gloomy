@@ -59,14 +59,7 @@ fn main() -> anyhow::Result<()> {
       
       let (prims, text) = win.renderer.split_mut();
 
-      render_ui(
-        &s.ui, 
-        prims, 
-        text, 
-        ctx.device, 
-        ctx.queue, 
-        Some(&s.interaction)
-      );
+      render_ui(&s.ui, &mut win.renderer, ctx.device, ctx.queue, Some(&s.interaction));
     })
     .run();
 

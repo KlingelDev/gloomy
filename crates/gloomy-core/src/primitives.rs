@@ -17,17 +17,18 @@ pub struct Instance {
   pub pos_b: Vec2,
   /// RGBA color
   pub color: Vec4,
+  /// Color End (for gradients). If same as color, solid fill.
+  pub color_end: Vec4,
   /// Corner radii: [TopRight, BottomRight, TopLeft, BottomLeft]
-  /// For Circle/Line, use index 0.
   pub radii: [f32; 4],
   /// Primitive type: 0=Rect, 1=Circle, 2=Line
   pub prim_type: u32,
-  /// Stroke width (0 for filled)
+  /// Stroke width
   pub stroke_width: f32,
-  /// Padding for alignment
+  /// Blur softness (SDF smoothing edge width)
+  pub softness: f32,
+  /// Padding
   pub _pad: u32,
-  /// Extra padding for 16-byte alignment (Total 64 bytes)
-  pub _pad2: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -115,11 +116,13 @@ impl PrimitiveRenderer {
             attributes: &wgpu::vertex_attr_array![
               0 => Float32x2,
               1 => Float32x2,
-              2 => Float32x4,
-              3 => Float32x4,
-              4 => Uint32,
-              5 => Float32,
-              6 => Uint32
+              2 => Float32x4, // color
+              3 => Float32x4, // color_end
+              4 => Float32x4, // radii
+              5 => Uint32,    // prim_type
+              6 => Float32,   // stroke_width
+              7 => Float32,   // softness
+              8 => Uint32     // pad
             ],
           }],
           compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -220,14 +223,39 @@ impl PrimitiveRenderer {
   ) {
     self.push_instance(Instance {
       pos_a: pos,
-      pos_b: size * 2.0, // Shader expects full size, we take half-extents
+      pos_b: size * 2.0,
       color,
+      color_end: color, // Solid fill by default
       radii,
       prim_type: 0,
       stroke_width,
+      softness: 0.0,
       _pad: 0,
-      _pad2: 0,
     });
+  }
+
+  /// Draws a rectangle with gradient and softness (shadow support).
+  pub fn draw_styled_rect(
+      &mut self,
+      pos: Vec2,
+      size: Vec2,
+      color_start: Vec4,
+      color_end: Vec4,
+      radii: [f32; 4],
+      stroke_width: f32,
+      softness: f32,
+  ) {
+      self.push_instance(Instance {
+          pos_a: pos,
+          pos_b: size * 2.0,
+          color: color_start,
+          color_end,
+          radii,
+          prim_type: 0,
+          stroke_width,
+          softness,
+          _pad: 0,
+      });
   }
 
   /// Draws a filled rectangle (convenience method).
@@ -253,11 +281,12 @@ impl PrimitiveRenderer {
       pos_a: center,
       pos_b: Vec2::ZERO,
       color,
+      color_end: color,
       radii: [radius, 0.0, 0.0, 0.0],
       prim_type: 1,
       stroke_width,
+      softness: 0.0,
       _pad: 0,
-      _pad2: 0,
     });
   }
 
@@ -279,11 +308,12 @@ impl PrimitiveRenderer {
       pos_a: start,
       pos_b: end,
       color,
+      color_end: color,
       radii: [thickness * 0.5, 0.0, 0.0, 0.0],
       prim_type: 2,
       stroke_width: 0.0,
+      softness: 0.0,
       _pad: 0,
-      _pad2: 0,
     });
   }
 
