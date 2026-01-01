@@ -25,6 +25,8 @@ pub mod svg_loader;
 pub mod theme;
 pub mod style;
 pub mod style_context;
+pub mod data_source;
+pub mod datagrid;
 
 pub use container::Container;
 pub use glam::{Vec2, Vec4};
