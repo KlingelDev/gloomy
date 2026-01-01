@@ -628,6 +628,52 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       );
     }
 
+    Widget::DataGrid {
+      bounds,
+      columns,
+      header_height,
+      style,
+      ..
+    } => {
+      let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+      
+      // Placeholder rendering - full implementation in next phase
+      
+      // Background
+      ctx.primitives.draw_rect(
+        pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5),
+        Vec2::new(bounds.width * 0.5, bounds.height * 0.5),
+        Vec4::from(style.row_background),
+        [0.0; 4],
+        0.0,
+      );
+      
+      // Header background  
+      ctx.primitives.draw_rect(
+        pos + Vec2::new(bounds.width * 0.5, header_height * 0.5),
+        Vec2::new(bounds.width * 0.5, header_height * 0.5),
+        Vec4::from(style.header_background),
+        [0.0; 4],
+        0.0,
+      );
+      
+      // Header text
+      let mut x_offset = style.cell_padding;
+      for column in columns.iter() {
+        ctx.text.draw(
+          ctx.device,
+          ctx.queue,
+          &column.header,
+          pos + Vec2::new(x_offset, header_height * 0.5),
+          14.0,
+          Vec4::from(style.header_text_color),
+          HorizontalAlign::Left,
+          None,
+        );
+        x_offset += 120.0;
+      }
+    }
+
     Widget::Checkbox { checked, style, bounds, size, .. } => {
         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
         let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);

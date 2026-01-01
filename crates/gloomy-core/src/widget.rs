@@ -628,6 +628,7 @@ impl Widget {
           Widget::Spacer { .. } => WidgetBounds::default(),
           Widget::Divider { bounds, .. } => *bounds,
           Widget::Scrollbar { bounds, .. } => *bounds,
+          Widget::DataGrid { bounds, .. } => *bounds,
       }
   }
 

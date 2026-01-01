@@ -426,6 +426,7 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::Spacer { .. } => 0.0,
     Widget::Divider { .. } => 0.0,
     Widget::Scrollbar { .. } => 0.0,
+    Widget::DataGrid { flex, .. } => *flex,
     Widget::Checkbox { flex, .. } => *flex,
     Widget::Slider { flex, .. } => *flex,
     Widget::Image { flex, .. } => *flex,
@@ -512,6 +513,7 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
        Orientation::Vertical => (style.width, 0.0),
       }
     }
+    Widget::DataGrid { bounds, .. } => (bounds.width, bounds.height),
     Widget::Checkbox { size, .. } => (*size, *size),
     Widget::Slider { width, style, .. } => {
           let h = (style.thumb_radius * 2.0).max(style.track_height);
@@ -595,6 +597,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
         }
       }
     }
+    Widget::DataGrid { bounds, .. } => {
+      bounds.width = w;
+      bounds.height = h;
+    }
     Widget::Checkbox { bounds, .. } => {
         bounds.width = w;
         bounds.height = h;
@@ -658,6 +664,10 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
       bounds.x = x;
       bounds.y = y;
     }
+    Widget::DataGrid { bounds, .. } => {
+      bounds.x = x;
+      bounds.y = y;
+    }
     Widget::Checkbox { bounds, .. } => {
         bounds.x = x;
         bounds.y = y;
@@ -695,6 +705,7 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::Spacer { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Divider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Scrollbar { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::DataGrid { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Checkbox { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Slider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Image { grid_col, .. } => grid_col.unwrap_or(0),
@@ -718,6 +729,7 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::Spacer { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Divider { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Scrollbar { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::DataGrid { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Checkbox { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Slider { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::ToggleSwitch { grid_row, .. } => grid_row.unwrap_or(0),
@@ -738,6 +750,7 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::Spacer { grid_col, .. } => *grid_col,
     Widget::Divider { grid_col, .. } => *grid_col,
     Widget::Scrollbar { grid_col, .. } => *grid_col,
+    Widget::DataGrid { grid_col, .. } => *grid_col,
     Widget::Checkbox { grid_col, .. } => *grid_col,
     Widget::Slider { grid_col, .. } => *grid_col,
     Widget::Image { grid_col, .. } => *grid_col,
@@ -761,6 +774,7 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::Spacer { grid_row, .. } => *grid_row,
     Widget::Divider { grid_row, .. } => *grid_row,
     Widget::Scrollbar { grid_row, .. } => *grid_row,
+    Widget::DataGrid { grid_row, .. } => *grid_row,
     Widget::Checkbox { grid_row, .. } => *grid_row,
     Widget::Slider { grid_row, .. } => *grid_row,
     Widget::ToggleSwitch { grid_row, .. } => *grid_row,
@@ -782,6 +796,7 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::Spacer { col_span, .. } => *col_span,
     Widget::Divider { col_span, .. } => *col_span,
     Widget::Scrollbar { col_span, .. } => *col_span,
+    Widget::DataGrid { col_span, .. } => *col_span,
     Widget::Checkbox { col_span, .. } => *col_span,
     Widget::Slider { col_span, .. } => *col_span,
     Widget::ToggleSwitch { col_span, .. } => *col_span,
@@ -802,6 +817,7 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::Spacer { row_span, .. } => *row_span,
     Widget::Divider { row_span, .. } => *row_span,
     Widget::Scrollbar { row_span, .. } => *row_span,
+    Widget::DataGrid { row_span, .. } => *row_span,
     Widget::Checkbox { row_span, .. } => *row_span,
     Widget::Slider { row_span, .. } => *row_span,
     Widget::ToggleSwitch { row_span, .. } => *row_span,
