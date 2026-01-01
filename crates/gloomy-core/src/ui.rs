@@ -558,6 +558,59 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       };
     }
 
+    Widget::Scrollbar {
+      bounds,
+      content_size,
+      viewport_size,
+      scroll_offset,
+      orientation,
+      style,
+      ..
+    } => {
+      use crate::widget::Orientation;
+      let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+      
+      // Draw track
+      ctx.primitives.draw_rect(
+        pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5),
+        Vec2::new(bounds.width * 0.5, bounds.height * 0.5),
+        Vec4::new(style.track_color.0, style.track_color.1, style.track_color.2, style.track_color.3),
+        [style.corner_radius; 4],
+        0.0
+      );
+      
+      // Calculate thumb size and position
+      let (thumb_pos, thumb_size) = match orientation {
+        Orientation::Vertical => {
+          let thumb_height = (viewport_size / content_size) * bounds.height;
+          let scroll_ratio = scroll_offset / (content_size - viewport_size).max(1.0);
+          let thumb_y = scroll_ratio * (bounds.height - thumb_height);
+          (
+            Vec2::new(pos.x, pos.y + thumb_y),
+            Vec2::new(bounds.width, thumb_height)
+          )
+        }
+        Orientation::Horizontal => {
+          let thumb_width = (viewport_size / content_size) * bounds.width;
+          let scroll_ratio = scroll_offset / (content_size - viewport_size).max(1.0);
+          let thumb_x = scroll_ratio * (bounds.width - thumb_width);
+          (
+            Vec2::new(pos.x + thumb_x, pos.y),
+            Vec2::new(thumb_width, bounds.height)
+          )
+        }
+      };
+      
+      // Draw thumb
+      ctx.primitives.draw_rect(
+        thumb_pos + thumb_size * 0.5,
+        thumb_size * 0.5,
+        Vec4::new(style.thumb_color.0, style.thumb_color.1, style.thumb_color.2, style.thumb_color.3),
+        [style.corner_radius; 4],
+        0.0
+      );
+    }
+
     Widget::Checkbox { checked, style, bounds, size, .. } => {
         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
         let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);

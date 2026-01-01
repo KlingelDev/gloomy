@@ -304,6 +304,29 @@ pub enum Widget {
     row_span: usize,
   },
 
+  /// Scrollbar for indicating scroll position.
+  Scrollbar {
+    #[serde(default)]
+    bounds: WidgetBounds,
+    content_size: f32,
+    viewport_size: f32,
+    scroll_offset: f32,
+    #[serde(default)]
+    orientation: Orientation,
+    #[serde(default)]
+    style: ScrollbarStyle,
+    #[serde(default)]
+    flex: f32,
+    #[serde(default)]
+    grid_col: Option<usize>,
+    #[serde(default)]
+    grid_row: Option<usize>,
+    #[serde(default = "default_span_one")]
+    col_span: usize,
+    #[serde(default = "default_span_one")]
+    row_span: usize,
+  },
+
   /// Text input field.
   TextInput {
     #[serde(default)]
@@ -571,6 +594,7 @@ impl Widget {
           Widget::Dropdown { bounds, .. } => *bounds,
           Widget::Spacer { .. } => WidgetBounds::default(),
           Widget::Divider { bounds, .. } => *bounds,
+          Widget::Scrollbar { bounds, .. } => *bounds,
       }
   }
 
@@ -697,6 +721,28 @@ pub struct ToggleSwitchStyle {
     pub track_height: f32,
     #[serde(default)]
     pub width: f32,
+}
+
+/// Style configuration for scrollbars.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct ScrollbarStyle {
+    pub track_color: Color,
+    pub thumb_color: Color,
+    pub thumb_hover_color: Color,
+    pub width: f32,
+    pub corner_radius: f32,
+}
+
+impl Default for ScrollbarStyle {
+    fn default() -> Self {
+        Self {
+            track_color: (0.1, 0.1, 0.1, 1.0),
+            thumb_color: (0.3, 0.3, 0.3, 1.0),
+            thumb_hover_color: (0.4, 0.4, 0.4, 1.0),
+            width: 12.0,
+            corner_radius: 6.0,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
