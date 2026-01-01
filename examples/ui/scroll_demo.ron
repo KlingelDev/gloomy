@@ -1,0 +1,58 @@
+Container(
+    bounds: (width: 800.0, height: 600.0),
+    background: Some((0.1, 0.1, 0.12, 1.0)),
+    layout: (
+        direction: Column,
+        padding: 20.0,
+        align_items: Center,
+        justify_content: Start,
+        spacing: 20.0,
+    ),
+    children: [
+        Label(
+            text: "Scrollable Container Demo",
+            size: 32.0,
+            color: (1.0, 1.0, 1.0, 1.0),
+        ),
+        
+        // Scrollable region
+        Container(
+            id: Some("scroll_view"),
+            scrollable: true,
+            bounds: (width: 400.0, height: 300.0),
+            background: Some((0.2, 0.2, 0.25, 1.0)),
+            corner_radius: 8.0,
+            layout: (
+                direction: Column,
+                padding: 10.0,
+                spacing: 10.0,
+                align_items: Stretch,
+            ),
+            children: [
+                Label(text: "Item 1", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 2", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 3", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 4", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 5", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 6", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 7", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 8", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 9", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 10", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 11", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 12", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 13", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 14", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+                Label(text: "Item 15", size: 20.0, color: (0.9, 0.9, 0.9, 1.0)),
+            ]
+        ),
+        
+        Button(
+            text: "Reset Scroll",
+            action: "reset",
+            bounds: (width: 150.0, height: 40.0),
+            background: (0.3, 0.5, 0.8, 1.0),
+            corner_radius: 6.0,
+        )
+    ]
+)

@@ -1,0 +1,61 @@
+[workspace]
+members = [
+    "crates/gloomy-core",
+    "crates/gloomy-app",
+    "crates/gloomy-designer",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Karl"]
+license = "MIT"
+
+[workspace.dependencies]
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+wgpu = "0.20"
+winit = "0.29"
+bytemuck = { version = "1.14", features = ["derive"] }
+glam = { version = "0.25", features = ["bytemuck"] }
+pollster = "0.3"
+
+[package]
+name = "gloomy"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+gloomy-core = { path = "crates/gloomy-core" }
+gloomy-app = { path = "crates/gloomy-app" }
+
+[dev-dependencies]
+env_logger = "0.10"
+anyhow = "1.0"
+winit.workspace = true
+image = "0.25.9"
+
+[[example]]
+name = "hello_gloomy"
+path = "examples/hello_gloomy.rs"
+
+[[example]]
+name = "ron_ui"
+path = "examples/ron_ui.rs"
+
+[[example]]
+name = "grid_ui"
+path = "examples/grid_ui.rs"
+
+[[example]]
+name = "form_ui"
+path = "examples/form_ui.rs"
+
+[[example]]
+name = "scroll_ui"
+path = "examples/scroll_ui.rs"
+
+[[example]]
+name = "style_ui"
+path = "examples/style_ui.rs"

@@ -1,0 +1,37 @@
+Container(
+    bounds: (width: 400.0, height: 300.0),
+    background: Some((0.95, 0.95, 0.95, 1.0)),
+    corner_radius: 8.0,
+    padding: 20.0,
+    layout: (
+        direction: Column,
+        spacing: 15.0,
+        align_items:  Stretch, 
+        justify_content: Start,
+    ),
+    children: [
+        Label(text: "Login", size: 24.0, color: (0.1, 0.1, 0.1, 1.0)),
+        
+        TextInput(
+            id: "username",
+            placeholder: "Username",
+            height: 40.0,
+        ),
+        
+        TextInput(
+            id: "password",
+            placeholder: "Password", 
+            // In real app we'd mask this, but for now it's just text
+            height: 40.0,
+        ),
+        
+        Spacer(size: 10.0),
+        
+        Button(
+            text: "Submit",
+            action: "submit",
+            background: (0.2, 0.6, 1.0, 1.0),
+            height: 40.0,
+        ),
+    ]
+)

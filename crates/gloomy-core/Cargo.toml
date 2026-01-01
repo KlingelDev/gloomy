@@ -1,0 +1,18 @@
+[package]
+name = "gloomy-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wgpu.workspace = true
+bytemuck.workspace = true
+glam.workspace = true
+log.workspace = true
+anyhow.workspace = true
+wgpu_text = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+ron = "0.8"
+image = "0.25.9"
+winit.workspace = true
+resvg = "0.36.0"
+tiny-skia = "0.11.3"

@@ -1,0 +1,38 @@
+//! Gloomy Core - GPU rendering primitives for the gloomy UI library.
+//!
+//! This crate provides the foundational rendering components:
+//! - SDF-based primitive rendering (rectangles, circles, lines)
+//! - TTF text rendering
+//! - Container-based layout system
+//! - RON-based declarative UI definitions
+//! - Flexbox-style layout engine
+//! - Interactive UI elements (buttons)
+//! - GPU context management
+
+pub mod container;
+pub mod interaction;
+pub mod image_renderer;
+pub mod layout;
+pub mod layout_engine;
+pub mod primitives;
+pub mod rect;
+pub mod renderer;
+pub mod text;
+pub mod texture;
+pub mod ui;
+pub mod widget;
+pub mod svg_loader;
+
+pub use container::Container;
+pub use glam::{Vec2, Vec4};
+pub use interaction::InteractionState;
+pub use layout::{Align, Direction, Justify, Layout};
+pub use layout_engine::compute_layout;
+pub use primitives::{Instance, PrimitiveRenderer};
+pub use rect::Rect;
+pub use renderer::GloomyRenderer;
+pub use text::TextRenderer;
+pub use ui::{
+  hit_test, load_ui, parse_ui, render_ui, RenderContext,
+};
+pub use widget::{Widget, WidgetBounds};

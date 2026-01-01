@@ -1,0 +1,178 @@
+Container(
+    bounds: (width: 800.0, height: 600.0),
+    background: Some((0.1, 0.1, 0.12, 1.0)),
+    layout: (
+        direction: Column,
+        justify_content: Start,
+        align_items: Stretch,
+    ),
+    children: [
+        // Title Bar
+        Container(
+            height: Some(60.0),
+            background: Some((0.15, 0.15, 0.18, 1.0)),
+            padding: 15.0,
+            layout: (
+                direction: Row,
+                justify_content: SpaceBetween,
+                align_items: Center,
+            ),
+            children: [
+                Label(text: "System Monitor", size: 24.0, color: (1.0, 1.0, 1.0, 1.0)),
+                Button(
+                    text: "Settings",
+                    action: "settings",
+                    bounds: (width: 100.0, height: 35.0),
+                    background: (0.2, 0.2, 0.25, 1.0),
+                    hover_color: (0.25, 0.25, 0.3, 1.0),
+                    active_color: (0.3, 0.3, 0.35, 1.0),
+                    corner_radius: 4.0
+                )
+            ]
+        ),
+
+        // Table Header
+        Container(
+            height: Some(40.0),
+            background: Some((0.2, 0.2, 0.22, 1.0)),
+            layout: (
+                direction: Grid(columns: 4),
+                template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                spacing: 1.0, // Grid lines
+                align_items: Stretch, // Ensure cells fill height
+            ),
+            children: [
+                Container(padding: 10.0, background: Some((0.2, 0.2, 0.22, 1.0)), children:[Label(text: "PROCESS NAME", size: 14.0, color: (0.7, 0.7, 0.7, 1.0))]),
+                Container(padding: 10.0, background: Some((0.2, 0.2, 0.22, 1.0)), children:[Label(text: "PID", size: 14.0, color: (0.7, 0.7, 0.7, 1.0))]),
+                Container(padding: 10.0, background: Some((0.2, 0.2, 0.22, 1.0)), children:[Label(text: "CPU %", size: 14.0, color: (0.7, 0.7, 0.7, 1.0))]),
+                Container(padding: 10.0, background: Some((0.2, 0.2, 0.22, 1.0)), children:[Label(text: "MEMORY", size: 14.0, color: (0.7, 0.7, 0.7, 1.0))]),
+            ]
+        ),
+
+        // Scrollable Table Body
+        Container(
+            flex: 1.0,
+            scrollable: true,
+            background: Some((0.12, 0.12, 0.14, 1.0)),
+            padding: 0.0,
+            layout: (
+               direction: Column, // List of Rows
+               align_items: Stretch,
+            ),
+            children: [
+               // Row 1
+               Container(
+                   height: Some(40.0),
+                   layout: (
+                       direction: Grid(columns: 4),
+                       template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                       spacing: 1.0,
+                       align_items: Stretch,
+                   ),
+                   children: [
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "gloomy_renderer", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "1352", size: 16.0, color: (0.6, 0.8, 1.0, 1.0))]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "4.2%", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "154 MB", size: 16.0)]),
+                   ]
+               ),
+               // Row 2
+               Container(
+                   height: Some(40.0),
+                   layout: (
+                       direction: Grid(columns: 4),
+                       template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                       spacing: 1.0,
+                       align_items: Stretch,
+                   ),
+                   children: [
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "wgpu_server", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "892", size: 16.0, color: (0.6, 0.8, 1.0, 1.0))]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "0.8%", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "45 MB", size: 16.0)]),
+                   ]
+               ),
+                // Row 3
+               Container(
+                   height: Some(40.0),
+                   layout: (
+                       direction: Grid(columns: 4),
+                       template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                       spacing: 1.0,
+                       align_items: Stretch,
+                   ),
+                   children: [
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "nav_system", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "4421", size: 16.0, color: (0.6, 0.8, 1.0, 1.0))]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "12.1%", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "892 MB", size: 16.0)]),
+                   ]
+               ),
+                // Row 4
+               Container(
+                   height: Some(40.0),
+                   layout: (
+                       direction: Grid(columns: 4),
+                       template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                       spacing: 1.0,
+                       align_items: Stretch,
+                   ),
+                   children: [
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "audio_daemon", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "112", size: 16.0, color: (0.6, 0.8, 1.0, 1.0))]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "0.1%", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "12 MB", size: 16.0)]),
+                   ]
+               ),
+               // Duplicate rows to test scrolling
+               Container(
+                   height: Some(40.0),
+                   layout: (
+                       direction: Grid(columns: 4),
+                       template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                       spacing: 1.0,
+                       align_items: Stretch,
+                   ),
+                   children: [
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "network_mgr", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "331", size: 16.0, color: (0.6, 0.8, 1.0, 1.0))]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "1.5%", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.15, 0.15, 0.17, 1.0)), children:[Label(text: "88 MB", size: 16.0)]),
+                   ]
+               ),
+               Container(
+                   height: Some(40.0),
+                   layout: (
+                       direction: Grid(columns: 4),
+                       template_columns: [Fr(2.0), Fr(1.0), Fr(1.0), Fr(1.5)],
+                       spacing: 1.0,
+                       align_items: Stretch,
+                   ),
+                   children: [
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "kernel_task", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "0", size: 16.0, color: (0.6, 0.8, 1.0, 1.0))]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "0.0%", size: 16.0)]),
+                       Container(padding: 10.0, background: Some((0.14, 0.14, 0.16, 1.0)), children:[Label(text: "Unknown", size: 16.0)]),
+                   ]
+               ),
+               // Filler to force scroll
+               Container(height: Some(400.0), background: Some((0.1, 0.1, 0.1, 0.0)), children:[]),
+            ]
+        ),
+        
+        // Footer
+        Container(
+            height: Some(30.0),
+            background: Some((0.2, 0.2, 0.22, 1.0)),
+            padding: 5.0,
+            layout: (
+                direction: Row,
+                justify_content: End,
+                align_items: Center
+            ),
+            children: [
+                Label(text: "Gloomy UI v0.1.0", size: 12.0, color: (0.5, 0.5, 0.5, 1.0))
+            ]
+        )
+    ]
+)

@@ -1,0 +1,114 @@
+// Dashboard UI definition - Standard RON syntax
+Container(
+  bounds: (x: 0, y: 0, width: 800, height: 600),
+  layout: (
+    direction: Column,
+    spacing: 0.0,
+    align_items: Stretch,
+    justify_content: Start,
+  ),
+  children: [
+    // Header
+    Container(
+      bounds: (width: 0, height: 80),
+      padding: 10.0,
+      children: [
+         Container(
+             bounds: (width: 0, height: 60),
+             background: Some((0.2, 0.2, 0.25, 1.0)),
+             corner_radius: 8.0,
+             layout: (
+                direction: Row, 
+                align_items: Center,
+                justify_content: Start,
+                spacing: 0.0,
+             ),
+             children: [
+                Spacer(size: 20.0),
+                Label(
+                  text: "Gloomy Dashboard",
+                  size: 24.0,
+                  color: (1.0, 1.0, 1.0, 1.0),
+                ),
+             ]
+         )
+      ]
+    ),
+    // Main Body
+    Container(
+      flex: 1.0,
+      padding: 10.0,
+      layout: (
+        direction: Row,
+        spacing: 10.0,
+        align_items: Stretch,
+      ),
+      children: [
+        // Sidebar
+        Container(
+          bounds: (width: 200, height: 0),
+          background: Some((0.15, 0.15, 0.18, 1.0)),
+          corner_radius: 8.0,
+          padding: 20.0,
+          layout: (
+            direction: Column,
+            spacing: 15.0,
+          ),
+          children: [
+            Label(text: "Dashboard", size: 16.0),
+            Label(text: "Data View", size: 16.0, color: (0.7, 0.7, 0.7, 1.0)),
+            Label(text: "Tables", size: 16.0, color: (0.7, 0.7, 0.7, 1.0)),
+            Label(text: "Settings", size: 16.0, color: (0.7, 0.7, 0.7, 1.0)),
+            Spacer(flex: 1.0),
+            Label(text: "v0.1.0", size: 12.0, color: (0.5, 0.5, 0.5, 1.0)),
+          ],
+        ),
+        // Content Area
+        Container(
+          flex: 1.0,
+          background: Some((0.18, 0.18, 0.22, 1.0)),
+          corner_radius: 8.0,
+          padding: 20.0,
+          layout: (
+            direction: Column,
+            spacing: 10.0,
+          ),
+          children: [
+            Label(text: "Welcome to Gloomy", size: 20.0),
+            Label(
+              text: "A keyboard-centric UI library loaded from RON.",
+              size: 14.0,
+              color: (0.7, 0.7, 0.7, 1.0),
+            ),
+            Spacer(size: 20.0),
+            Label(
+              text: "Layout Engine:",
+              size: 16.0,
+              color: (0.8, 0.8, 1.0, 1.0),
+            ),
+             Label(
+              text: "- Row / Column support",
+              size: 14.0,
+              color: (0.7, 0.7, 0.7, 1.0),
+            ),
+            Button(
+              text: "Action Button",
+              action: "click_me",
+              flex: 0.0,
+            ),
+             Label(
+              text: "- Flex sizing (grow to fill)",
+              size: 14.0,
+              color: (0.7, 0.7, 0.7, 1.0),
+            ),
+            Label(
+              text: "- Alignment & Justification",
+              size: 14.0,
+              color: (0.7, 0.7, 0.7, 1.0),
+            ),
+          ],
+        ),
+      ],
+    ),
+  ],
+)

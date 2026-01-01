@@ -1,0 +1,16 @@
+[package]
+name = "gloomy-designer"
+version = "0.1.0"
+edition = "2021"
+description = "Visual designer for Gloomy UI RON layouts"
+
+[dependencies]
+gloomy-core = { path = "../gloomy-core" }
+gloomy-app = { path = "../gloomy-app" }
+log = "0.4"
+env_logger = "0.10"
+ron = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+glam = "0.29"
+anyhow = "1.0"
+winit.workspace = true

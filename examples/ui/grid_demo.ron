@@ -1,0 +1,51 @@
+Container(
+    bounds: (width: 400.0, height: 500.0),
+    background: Some((0.1, 0.1, 0.1, 1.0)),
+    corner_radius: 10.0,
+    padding: 20.0,
+    layout: (
+        direction: Grid(columns: 4),
+        expect_spacing: 10.0, // using spacing field from existing layout struct?
+        spacing: 10.0,
+        align_items:  Stretch, 
+        justify_content: Start,
+    ),
+    children: [
+        Button(
+            text: "0.00",
+            action: "display",
+            grid_col: 0,
+            grid_row: 0,
+            col_span: 4,
+            row_span: 1,
+            background: (0.0, 0.0, 0.0, 1.0),
+            bounds: (width: 0.0, height: 60.0), // Force fixed height for row?
+        ),
+        
+        // Row 1
+        Button(text: "7", action: "7", grid_col: 0, grid_row: 1),
+        Button(text: "8", action: "8", grid_col: 1, grid_row: 1),
+        Button(text: "9", action: "9", grid_col: 2, grid_row: 1),
+        Button(text: "/", action: "div", grid_col: 3, grid_row: 1, background: (1.0, 0.5, 0.0, 1.0)),
+
+        // Row 2
+        Button(text: "4", action: "4", grid_col: 0, grid_row: 2),
+        Button(text: "5", action: "5", grid_col: 1, grid_row: 2),
+        Button(text: "6", action: "6", grid_col: 2, grid_row: 2),
+        Button(text: "*", action: "mul", grid_col: 3, grid_row: 2, background: (1.0, 0.5, 0.0, 1.0)),
+
+        // Row 3 (Offset test)
+        Button(text: "1", action: "1", grid_col: 0, grid_row: 3),
+        Button(text: "2", action: "2", grid_col: 1, grid_row: 3),
+        Button(text: "3", action: "3", grid_col: 2, grid_row: 3),
+        Button(text: "-", action: "sub", grid_col: 3, grid_row: 3, background: (1.0, 0.5, 0.0, 1.0)),
+
+        // Row 4 (Span test)
+        Button(text: "0", action: "0", grid_col: 0, grid_row: 4, col_span: 2, row_span: 1),
+        Button(text: ".", action: "dot", grid_col: 2, grid_row: 4),
+        Button(text: "+", action: "add", grid_col: 3, grid_row: 4, background: (1.0, 0.5, 0.0, 1.0)),
+        
+        // Row 5 (Full span)
+        Button(text: "=", action: "eq", grid_col: 0, grid_row: 5, col_span: 4, background: (0.2, 0.8, 0.2, 1.0)),
+    ]
+)

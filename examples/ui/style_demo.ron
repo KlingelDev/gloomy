@@ -1,0 +1,90 @@
+Container(
+    bounds: (width: 800.0, height: 600.0),
+    background: Some((0.15, 0.15, 0.18, 1.0)),
+    layout: (
+        direction: Column,
+        padding: 40.0,
+        align_items: Center,
+        spacing: 20.0,
+    ),
+    children: [
+        Label(
+            text: "Styling Demo",
+            size: 32.0,
+            color: (1.0, 1.0, 1.0, 1.0),
+        ),
+        
+        Spacer(size: 20.0),
+        
+        // Bordered Container
+        Container(
+            bounds: (width: 400.0, height: 100.0),
+            background: Some((0.2, 0.2, 0.25, 1.0)),
+            border_width: 2.0,
+            border_color: Some((1.0, 0.8, 0.0, 1.0)), // Gold border
+            // corner_radius: 12.0, (Use per-corner instead)
+            corner_radii: Some((12.0, 4.0, 12.0, 4.0)), // TR, BR, TL, BL
+            padding: 20.0,
+            layout: (align_items: Center, justify_content: Center, direction: Column),
+            children: [
+                Label(text: "Mixed Corners", size: 18.0, color: (1.0, 1.0, 1.0, 1.0))
+            ]
+        ),
+        
+        Spacer(size: 10.0),
+        
+        // Buttons with various styles
+        Container(
+             layout: (direction: Row, spacing: 15.0),
+             children: [
+                 Button(
+                     text: "Normal",
+                     action: "btn1",
+                     bounds: (width: 100.0, height: 40.0),
+                     background: (0.3, 0.3, 0.8, 1.0),
+                     corner_radius: 6.0,
+                 ),
+                 Button(
+                     text: "Bordered",
+                     action: "btn2",
+                     bounds: (width: 100.0, height: 40.0),
+                     background: (0.3, 0.3, 0.3, 1.0),
+                     border_width: 2.0,
+                     border_color: Some((1.0, 1.0, 1.0, 1.0)),
+                     corner_radius: 6.0,
+                 ),
+             ]
+        ),
+        
+        Spacer(size: 20.0),
+        
+        // Inputs with alignment
+        TextInput(
+             id: "input1",
+             value: "Left Aligned",
+             font_size: 16.0,
+             text_align: Left,
+             width: 300.0, height: 40.0,
+             border_width: 1.0,
+             border_color: Some((0.5, 0.5, 0.5, 1.0)),
+        ),
+        TextInput(
+             id: "input2",
+             value: "Centered",
+             font_size: 16.0,
+             text_align: Center,
+             width: 300.0, height: 40.0,
+             border_width: 1.0,
+             border_color: Some((0.5, 0.5, 0.5, 1.0)),
+        ),
+        TextInput(
+             id: "input3",
+             value: "Right Aligned",
+             font_size: 16.0,
+             text_align: Right,
+             width: 300.0, height: 40.0,
+             border_width: 1.0,
+             border_color: Some((0.5, 0.5, 0.5, 1.0)),
+        ),
+    ]
+)
