@@ -322,7 +322,19 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       }
     }
 
-    Widget::Label { text, x, y, size, color, text_align, width, font, .. } => {
+    Widget::Label { text, x, y, size, color, text_align, width, height, font, .. } => {
+      // Set scissor to clip text within label bounds
+      let scissor_x = (ctx.offset.x + x).max(0.0) as u32;
+      let scissor_y = (ctx.offset.y + y).max(0.0) as u32;
+      let scissor_w = (*width).max(0.0) as u32;
+      let scissor_h = (*height).max(0.0) as u32;
+      
+      let old_scissor = if scissor_w > 0 && scissor_h > 0 {
+        Some(ctx.text.set_scissor(Some((scissor_x, scissor_y, scissor_w, scissor_h))))
+      } else {
+        None
+      };
+      
       let align = match text_align {
           TextAlign::Left => HorizontalAlign::Left,
           TextAlign::Center => HorizontalAlign::Center,
@@ -346,6 +358,11 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         align,
         font.as_deref(),
       );
+      
+      // Restore scissor
+      if let Some(prev) = old_scissor {
+        ctx.text.set_scissor(prev);
+      }
     }
 
     Widget::Button {
