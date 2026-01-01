@@ -327,6 +327,39 @@ pub enum Widget {
     row_span: usize,
   },
 
+  /// Data grid for displaying tabular data.
+  DataGrid {
+    #[serde(default)]
+    bounds: WidgetBounds,
+    columns: Vec<crate::datagrid::ColumnDef>,
+    #[serde(default)]
+    data_source_id: Option<String>,
+    #[serde(default)]
+    header_height: f32,
+    #[serde(default)]
+    row_height: f32,
+    #[serde(default)]
+    striped: bool,
+    #[serde(default)]
+    selection_mode: crate::datagrid::SelectionMode,
+    #[serde(default)]
+    show_vertical_lines: bool,
+    #[serde(default)]
+    show_horizontal_lines: bool,
+    #[serde(default)]
+    style: crate::datagrid::DataGridStyle,
+    #[serde(default)]
+    flex: f32,
+    #[serde(default)]
+    grid_col: Option<usize>,
+    #[serde(default)]
+    grid_row: Option<usize>,
+    #[serde(default = "default_span_one")]
+    col_span: usize,
+    #[serde(default = "default_span_one")]
+    row_span: usize,
+  },
+
   /// Text input field.
   TextInput {
     #[serde(default)]
