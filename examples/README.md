@@ -79,6 +79,11 @@ cargo run --example <example_name>
   cargo run --example table_ui
   ```
 
+- **`simple_datagrid`** - Feature-rich DataGrid with sorting, resizing, scrolling
+  ```bash
+  cargo run --example simple_datagrid
+  ```
+
 ### RON-based Examples
 
 - **`ron_ui`** - Loading UI from RON files

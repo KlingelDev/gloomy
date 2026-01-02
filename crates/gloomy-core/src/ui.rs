@@ -52,6 +52,8 @@ pub struct RenderContext<'a> {
   pub surface_width: u32,
   pub surface_height: u32,
   pub overlay_queue: Vec<(Widget, Vec2)>, // Widget + Absolute Position
+  pub data_provider: Option<&'a dyn crate::data_source::DataProvider>,
+  pub widget_tracker: Option<&'a mut crate::widget_state::WidgetStateTracker>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -66,6 +68,8 @@ impl<'a> RenderContext<'a> {
     interaction: Option<&'a InteractionState>,
     surface_width: u32,
     surface_height: u32,
+    data_provider: Option<&'a dyn crate::data_source::DataProvider>,
+    widget_tracker: Option<&'a mut crate::widget_state::WidgetStateTracker>,
   ) -> Self {
     Self {
       primitives,
@@ -81,49 +85,248 @@ impl<'a> RenderContext<'a> {
       surface_width,
       surface_height,
       overlay_queue: Vec::new(),
+      data_provider,
+      widget_tracker,
     }
   }
 
-  /// Pushes a new scissor rect, intersecting with the current one.
-  pub fn push_scissor(&mut self, rect: Option<(u32, u32, u32, u32)>) {
-      self.scissor_stack.push(self.current_scissor);
-      
-      if let Some(r) = rect {
-          if let Some(current) = self.current_scissor {
-              let x = r.0.max(current.0);
-              let y = r.1.max(current.1);
-              let right = (r.0 + r.2).min(current.0 + current.2).min(self.surface_width);
-              let bottom = (r.1 + r.3).min(current.1 + current.3).min(self.surface_height);
-              
-              let w = if right > x { right - x } else { 0 };
-              let h = if bottom > y { bottom - y } else { 0 };
-              self.current_scissor = Some((x, y, w, h));
-          } else {
-              // Clamp to surface
-              let x = r.0.min(self.surface_width);
-              let y = r.1.min(self.surface_height);
-              let w = r.2.min(self.surface_width - x);
-              let h = r.3.min(self.surface_height - y);
-              self.current_scissor = Some((x, y, w, h));
+    pub fn push_scissor(&mut self, rect: Option<(u32, u32, u32, u32)>) {
+          self.scissor_stack.push(self.current_scissor);
+          
+          if let Some(r) = rect {
+              if let Some(current) = self.current_scissor {
+                  let x = r.0.max(current.0);
+                  let y = r.1.max(current.1);
+                  let w = (r.0 + r.2).min(current.0 + current.2) - x;
+                  let h = (r.1 + r.3).min(current.1 + current.3) - y;
+                  if w > 0 && h > 0 {
+                      self.current_scissor = Some((x, y, w, h));
+                  } else {
+                      self.current_scissor = Some((0, 0, 0, 0));
+                  }
+              } else {
+                  self.current_scissor = Some(r);
+              }
           }
-      }
-      
-      self.update_renderers();
-  }
-  
-  pub fn pop_scissor(&mut self) {
-      if let Some(prev) = self.scissor_stack.pop() {
-          self.current_scissor = prev;
-          self.update_renderers();
-      }
-  }
+          
+          self.primitives.set_scissor(self.current_scissor);
+          self.text.set_scissor(self.current_scissor);
+          self.images.set_scissor(self.current_scissor);
+    }
+    
+    pub fn pop_scissor(&mut self) {
+        self.current_scissor = self.scissor_stack.pop().flatten();
+        self.primitives.set_scissor(self.current_scissor);
+        self.text.set_scissor(self.current_scissor);
+        self.images.set_scissor(self.current_scissor);
+    }
 
-  fn update_renderers(&mut self) {
-    // This helper depends on `self.current_scissor`
-    self.primitives.set_scissor(self.current_scissor);
-    self.text.set_scissor(self.current_scissor);
-    self.images.set_scissor(self.current_scissor);
-  }
+    // --- RENDER CACHING API ---
+
+    pub fn begin_capture(&self) -> CaptureState {
+        CaptureState {
+            prim_counts: self.primitives.get_counts(),
+            text_count: self.text.get_count(),
+            img_counts: self.images.get_counts(),
+            base_offset: self.offset,
+        }
+    }
+
+    pub fn end_capture(&self, start: &CaptureState) -> crate::widget::RenderCache {
+        let (p_inst, p_batch) = start.prim_counts;
+        let t_count = start.text_count;
+        let (i_inst, i_batch) = start.img_counts;
+
+        let primitives = self.primitives.capture(p_inst, p_batch);
+        let text = self.text.capture(t_count);
+        let images = self.images.capture(i_inst, i_batch);
+
+        // Optimization: return None if empty? 
+        // For now, store fully.
+        
+        crate::widget::RenderCache {
+            primitives: Some(primitives),
+            text: Some(text),
+            images: Some(images),
+            base_offset: start.base_offset,
+        }
+    }
+
+    pub fn replay_cache(&mut self, cache: &crate::widget::RenderCache) {
+        let delta = self.offset - cache.base_offset;
+        
+        if let Some(p) = &cache.primitives {
+            self.primitives.replay(p, delta);
+        }
+        if let Some(t) = &cache.text {
+            self.text.replay(t, delta);
+        }
+        if let Some(i) = &cache.images {
+            self.images.replay(i, delta);
+        }
+    }
+}
+
+pub struct CaptureState {
+    pub prim_counts: (usize, usize),
+    pub text_count: usize,
+    pub img_counts: (usize, usize),
+    pub base_offset: Vec2,
+}
+
+/// Renders text with optional rich text markup support.
+/// Automatically detects and parses HTML-like markup.
+/// Uses cached parsing to avoid re-parsing unchanged text.
+fn render_text_field(
+    ctx: &mut RenderContext,
+    text: &str,
+    pos: Vec2,
+    default_size: f32,
+    default_color: (f32, f32, f32, f32),
+    default_font: Option<&str>,
+    align: TextAlign,
+    max_width: Option<f32>,
+) {
+    use crate::rich_text::{RichText, TextStyle};
+    use std::collections::HashMap;
+    use std::cell::RefCell;
+    use std::hash::{Hash, Hasher};
+    use std::collections::hash_map::DefaultHasher;
+    
+    
+    // Quick check for markup
+    if RichText::has_markup(text) {
+        // Compute hash for cache lookup (content-addressable)
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        // Include style in hash for correct invalidation
+        (default_size as u32).hash(&mut hasher);
+        // Hash color too to ensure correctness if same text used with diff colors
+        ((default_color.0 * 255.0) as u32).hash(&mut hasher);
+        let cache_key = hasher.finish();
+        
+        // Try to get from tracker first, then fall back to parse
+        let rich_text = if let Some(tracker) = &mut ctx.widget_tracker {
+            if let Some(cached) = tracker.get_by_hash(cache_key) {
+                cached
+            } else {
+                let base_style = TextStyle {
+                    color: default_color,
+                    font_size: Some(default_size),
+                    font_family: default_font.map(|s| s.to_string()),
+                    bold: false,
+                    italic: false,
+                    underline: false,
+                };
+                let parsed = RichText::parse(text, base_style);
+                tracker.store_by_hash(cache_key, parsed.clone());
+                parsed
+            }
+        } else {
+             // Fallback to local parsing (or could keep thread_local as Level 2 cache)
+             // For now just parse to keep it simple, as tracker is expected
+                let base_style = TextStyle {
+                    color: default_color,
+                    font_size: Some(default_size),
+                    font_family: default_font.map(|s| s.to_string()),
+                    bold: false,
+                    italic: false,
+                    underline: false,
+                };
+                RichText::parse(text, base_style)
+        };
+        
+        render_rich_text(ctx, &rich_text, pos, default_size, align, max_width);
+    } else {
+        // Render as plain text (fast path)
+        ctx.text.draw(
+            ctx.device,
+            ctx.queue,
+            text,
+            pos,
+            default_size,
+            Vec4::from(default_color),
+            map_text_align(align),
+            default_font
+        );
+    }
+}
+
+/// Renders parsed rich text with per-span styling.
+/// Uses per-character rendering with glyph caching for optimal performance.
+fn render_rich_text(
+    ctx: &mut RenderContext,
+    rich_text: &crate::rich_text::RichText,
+    base_pos: Vec2,
+    default_size: f32,
+    align: TextAlign,
+    _max_width: Option<f32>,
+) {
+    // Calculate total width for alignment
+    let (total_width, _) = rich_text.measure(default_size);
+    
+    // Calculate starting X offset based on alignment
+    let mut x_offset = match align {
+        TextAlign::Left => 0.0,
+        TextAlign::Center => -total_width / 2.0,
+        TextAlign::Right => -total_width,
+    };
+    
+    // Render each span with per-character positioning (uses glyph cache)
+    for span in &rich_text.spans {
+        let size = span.style.font_size.unwrap_or(default_size);
+        let base_font = span.style.font_family.as_deref();
+        
+        // Select appropriate font variant based on bold/italic flags
+        let font_name = ctx.text.get_font_for_style(
+            base_font,
+            span.style.bold,
+            span.style.italic
+        );
+        
+        // Render each character with cached measurements
+        for ch in span.text.chars() {
+            let ch_str = ch.to_string();
+            let char_pos = Vec2::new(base_pos.x + x_offset, base_pos.y);
+            
+            // Draw the character
+            ctx.text.draw(
+                ctx.device,
+                ctx.queue,
+                &ch_str,
+                char_pos,
+                size,
+                Vec4::from(span.style.color),
+                HorizontalAlign::Left,
+                font_name
+            );
+            
+            // Use cached character measurement
+            let char_width = ctx.text.measure_char_cached(ch, size, font_name);
+            
+            // Draw underline if needed
+            if span.style.underline {
+                let underline_y = char_pos.y + size * 0.85;
+                ctx.primitives.draw_line(
+                    Vec2::new(char_pos.x, underline_y),
+                    Vec2::new(char_pos.x + char_width, underline_y),
+                    1.0,
+                    Vec4::from(span.style.color),
+                );
+            }
+            
+            x_offset += char_width;
+        }
+    }
+}
+
+/// Maps TextAlign to glyph_brush HorizontalAlign.
+fn map_text_align(align: TextAlign) -> HorizontalAlign {
+    match align {
+        TextAlign::Left => HorizontalAlign::Left,
+        TextAlign::Center => HorizontalAlign::Center,
+        TextAlign::Right => HorizontalAlign::Right,
+    }
 }
 
 /// Renders a widget tree recursively.
@@ -217,12 +420,28 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
                 gradient: None, padding: 0.0, layout: crate::layout::Layout { direction: crate::layout::Direction::Column, ..Default::default() },
                 flex: 0.0, grid_col: None, grid_row: None, col_span: 1, row_span: 1, corner_radii: None,
                 children: list_children,
+                layout_cache: None,
+                render_cache: std::cell::RefCell::new(None),
             };
             let overlay_pos = pos + Vec2::new(0.0, h);
             ctx.overlay_queue.push((dropdown_list, overlay_pos));
         }
     }
-    Widget::Container { id, children, bounds, padding: _, background, corner_radius, scrollable, shadow, gradient, border, .. } => {
+    Widget::Container { id, children, bounds, padding: _, background, corner_radius, scrollable, shadow, gradient, border, layout_cache, render_cache, .. } => {
+      // --- RENDER CACHE CHECK ---
+      if let Some(l_cache) = layout_cache {
+          if l_cache.valid {
+              if let Some(r_cache) = render_cache.borrow().as_ref() {
+                   // Check if bounds match? Layout cache validity implies bounds are consistent with constraints.
+                   // So we can safely replay.
+                   ctx.replay_cache(r_cache);
+                   return;
+              }
+          }
+      }
+
+      let capture_state = ctx.begin_capture();
+
       let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
 
       // 1. Draw Shadow
@@ -320,6 +539,10 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       if pushed_scissor {
           ctx.pop_scissor();
       }
+
+      // --- RENDER CACHE UPDATE ---
+      let new_cache = ctx.end_capture(&capture_state);
+      *render_cache.borrow_mut() = Some(Box::new(new_cache));
     }
 
     Widget::Label { text, x, y, size, color, text_align, width, height, font, .. } => {
@@ -335,12 +558,6 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         None
       };
       
-      let align = match text_align {
-          TextAlign::Left => HorizontalAlign::Left,
-          TextAlign::Center => HorizontalAlign::Center,
-          TextAlign::Right => HorizontalAlign::Right,
-      };
-      
       let mut text_pos = ctx.offset + Vec2::new(*x, *y);
       if *text_align == TextAlign::Center {
           text_pos.x += width * 0.5;
@@ -348,15 +565,16 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
           text_pos.x += width;
       }
 
-      ctx.text.draw(
-        ctx.device,
-        ctx.queue,
+      // Use rich text rendering (automatically handles markup)
+      render_text_field(
+        ctx,
         text,
         text_pos,
         *size,
-        Vec4::new(color.0, color.1, color.2, color.3),
-        align,
+        *color,
         font.as_deref(),
+        *text_align,
+        Some(*width),
       );
       
       // Restore scissor
@@ -467,12 +685,22 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       }
 
       let text_size = 16.0;
-      let text_dims = ctx.text.measure(text, text_size, font.as_deref());
-      let text_pos = pos + Vec2::new((bounds.width - text_dims.x) * 0.5, (bounds.height - text_dims.y) * 0.5);
-      // Bright text
-      let text_col = Vec4::new(1.0, 1.0, 1.0, 1.0);
+      // Calculate center position for the button
+      let text_pos = pos + Vec2::new(bounds.width * 0.5, (bounds.height - text_size) * 0.5);
+      let text_col = (1.0, 1.0, 1.0, 1.0);
 
-      ctx.text.draw(ctx.device, ctx.queue, text, text_pos, text_size, text_col, HorizontalAlign::Left, font.as_deref());
+      // Use rich text rendering with center alignment
+      // The render_text_field will handle centering the text around text_pos
+      render_text_field(
+        ctx,
+        text,
+        text_pos,
+        text_size,
+        text_col,
+        font.as_deref(),
+        TextAlign::Center,
+        Some(bounds.width),
+      );
     }
 
     Widget::TextInput {
@@ -631,13 +859,66 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
     Widget::DataGrid {
       bounds,
       columns,
+      data_source_id,
       header_height,
+      row_height,
+      striped,
+      show_vertical_lines,
+      show_horizontal_lines,
       style,
+      id,
+      selected_rows,
+      sort_column,
+      sort_direction,
       ..
     } => {
       let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
       
-      // Placeholder rendering - full implementation in next phase
+      // Calculate Scroll Offset
+      let scroll_offset = id.as_ref()
+           .and_then(|i| ctx.interaction.as_ref().map(|s| s.scroll_offsets.get(i)))
+           .flatten()
+           .map(|v| v.y)
+           .unwrap_or(0.0);
+
+      // 1. Resolve Data Source
+      let source = data_source_id.as_ref()
+           .and_then(|id| ctx.data_provider.and_then(|dp| dp.get_source(id)));
+      
+      // 2. Calculate column widths
+      let available_width = bounds.width;
+      let mut col_widths = Vec::with_capacity(columns.len());
+      let mut total_fixed = 0.0;
+      let mut total_flex = 0.0;
+      
+      for col in columns {
+          match col.width {
+              crate::datagrid::ColumnWidth::Fixed(w) => {
+                  total_fixed += w;
+              }
+              crate::datagrid::ColumnWidth::Flex(f) => {
+                  total_flex += f;
+              }
+              _ => total_fixed += col.min_width,
+          }
+      }
+      
+      let remaining = (available_width - total_fixed).max(0.0);
+      
+      for col in columns {
+          let w = match col.width {
+              crate::datagrid::ColumnWidth::Fixed(w) => w,
+              crate::datagrid::ColumnWidth::Flex(f) => {
+                  if total_flex > 0.0 {
+                      (remaining * f / total_flex).max(col.min_width)
+                  } else {
+                      col.min_width
+                  }
+              }
+              crate::datagrid::ColumnWidth::Auto => col.min_width, 
+          };
+          col_widths.push(w);
+      }
       
       // Background
       ctx.primitives.draw_rect(
@@ -647,31 +928,233 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         [0.0; 4],
         0.0,
       );
-      
-      // Header background  
-      ctx.primitives.draw_rect(
-        pos + Vec2::new(bounds.width * 0.5, header_height * 0.5),
-        Vec2::new(bounds.width * 0.5, header_height * 0.5),
-        Vec4::from(style.header_background),
-        [0.0; 4],
-        0.0,
-      );
-      
-      // Header text
-      let mut x_offset = style.cell_padding;
-      for column in columns.iter() {
-        ctx.text.draw(
-          ctx.device,
-          ctx.queue,
-          &column.header,
-          pos + Vec2::new(x_offset, header_height * 0.5),
-          14.0,
-          Vec4::from(style.header_text_color),
-          HorizontalAlign::Left,
-          None,
-        );
-        x_offset += 120.0;
-      }
+
+      // Render Rows
+      if let Some(ds) = source {
+          let row_count = ds.row_count();
+          let visible_height = bounds.height - header_height;
+          
+          let start_row = (scroll_offset / row_height).floor().max(0.0) as usize;
+          let visible_rows_count = (visible_height / row_height).ceil() as usize + 1;
+          let end_row = (start_row + visible_rows_count).min(row_count);
+          
+          let content_y = pos.y + header_height;
+          
+          let mut r = start_row;
+          while r < end_row {
+               let row_y = pos.y + header_height + ((r as f32) * row_height) - scroll_offset;
+               let center_y = row_y + row_height * 0.5;
+               
+               // Clip check
+               if row_y + row_height < content_y || row_y > content_y + visible_height {
+                   r += 1;
+                   continue;
+               }
+               
+               // Selection & Striping
+               if selected_rows.contains(&r) {
+                   ctx.primitives.draw_rect(
+                       Vec2::new(pos.x + bounds.width * 0.5, center_y),
+                       Vec2::new(bounds.width * 0.5, row_height * 0.5),
+                       Vec4::from(style.selected_background),
+                       [0.0; 4],
+                       0.0
+                   );
+               } else if *striped && r % 2 == 1 {
+                   ctx.primitives.draw_rect(
+                       Vec2::new(pos.x + bounds.width * 0.5, center_y),
+                       Vec2::new(bounds.width * 0.5, row_height * 0.5),
+                       Vec4::from(style.alt_row_background),
+                       [0.0; 4],
+                       0.0
+                   );
+               }
+               
+               // Horizontal Lines
+               if *show_horizontal_lines {
+                    let line_y = row_y + row_height;
+                    ctx.primitives.draw_rect(
+                         Vec2::new(pos.x + bounds.width * 0.5, line_y - style.grid_line_width * 0.5),
+                         Vec2::new(bounds.width * 0.5, style.grid_line_width * 0.5),
+                         Vec4::from(style.grid_line_color),
+                         [0.0; 4],
+                         0.0
+                    );
+               }
+
+               // Cells
+               let mut x = pos.x;
+               for (c, col) in columns.iter().enumerate() {
+                   let w = col_widths[c];
+                   // Column Virtualization / Culling
+                   let col_end = x + w;
+                   
+                   // Check if column is within visible bounds
+                   // Note: x is absolute screen position. 
+                   // visible range is [pos.x, pos.x + bounds.width]
+                   if col_end < pos.x {
+                       x += w;
+                       continue;
+                   }
+                   if x > pos.x + bounds.width {
+                       break; // All subsequent columns are also to the right
+                   }
+                   
+                   let text = ds.cell_text(r, c);
+                   
+                   let (text_align_enum, text_x) = match col.align {
+                       crate::widget::TextAlign::Left => (crate::widget::TextAlign::Left, x + style.cell_padding),
+                       crate::widget::TextAlign::Center => (crate::widget::TextAlign::Center, x + w * 0.5),
+                       crate::widget::TextAlign::Right => (crate::widget::TextAlign::Right, x + w - style.cell_padding),
+                   };
+                   
+                   // Use rich text rendering for cells
+                   render_text_field(
+                       ctx,
+                       &text,
+                       Vec2::new(text_x, center_y),
+                       13.0,
+                       style.row_text_color,
+                       None,
+                       text_align_enum,
+                       Some(w),
+                   );
+                   x += w;
+               }
+               r += 1;
+           }
+       }
+
+       // Scrollbar
+       if let Some(ds) = source {
+           let row_count = ds.row_count();
+           let total_height = row_count as f32 * row_height;
+           let visible_height = (bounds.height - header_height).max(0.0);
+           
+           if total_height > visible_height {
+                let track_w = 12.0;
+                let track_h = visible_height;
+                let track_x = pos.x + bounds.width - track_w - 2.0;
+                let track_y = pos.y + header_height;
+                
+                // Track
+                let track_center = Vec2::new(track_x + track_w * 0.5, track_y + track_h * 0.5);
+                ctx.primitives.draw_rect(
+                    track_center,
+                    Vec2::new(track_w * 0.5, track_h * 0.5),
+                    Vec4::new(0.0, 0.0, 0.0, 0.2), 
+                    [4.0; 4],
+                    0.0
+                );
+                
+                // Thumb
+                let thumb_h = (visible_height / total_height * track_h).max(20.0);
+                // Clamp ratio 0..1 to be safe
+                let max_scroll = total_height - visible_height;
+                let scroll_ratio = (scroll_offset / max_scroll).clamp(0.0, 1.0);
+                
+                let available_travel = track_h - thumb_h;
+                let thumb_offset = scroll_ratio * available_travel;
+                let thumb_y = track_y + thumb_offset;
+                
+                let thumb_center = Vec2::new(track_x + track_w * 0.5, thumb_y + thumb_h * 0.5);
+                ctx.primitives.draw_rect(
+                    thumb_center,
+                    Vec2::new(track_w * 0.5 - 2.0, thumb_h * 0.5), 
+                    Vec4::new(0.5, 0.5, 0.5, 0.8),
+                    [3.0; 4],
+                    0.0
+                );
+           }
+       }
+
+      // Header
+       ctx.primitives.draw_rect(
+         pos + Vec2::new(bounds.width * 0.5, header_height * 0.5),
+         Vec2::new(bounds.width * 0.5, header_height * 0.5),
+         Vec4::from(style.header_background),
+         [0.0; 4],
+         0.0,
+       );
+       
+       let mut x = pos.x;
+       for (i, col) in columns.iter().enumerate() {
+           let w = col_widths[i];
+           
+           ctx.text.draw(
+             ctx.device,
+             ctx.queue,
+             &col.header,
+             Vec2::new(x + style.cell_padding, pos.y + header_height * 0.5),
+             14.0,
+             Vec4::from(style.header_text_color),
+             HorizontalAlign::Left,
+             None,
+           );
+
+            // Check for Hovered Resize
+            let mut is_resize_hover = false;
+            if let Some(interaction) = ctx.interaction {
+                if let Some(ref action) = interaction.hovered_action {
+                    if action == &format!("{}:header_resize:{}", id.as_ref().unwrap_or(&"".to_string()), i) {
+                        is_resize_hover = true;
+                    }
+                }
+            }
+            
+            if is_resize_hover {
+                 // Draw Highlight Line
+                 let line_x = x + w;
+                 ctx.primitives.draw_rect(
+                     Vec2::new(line_x, pos.y + header_height * 0.5),
+                     Vec2::new(2.0, header_height * 0.8), // 4px wide (2.0 radius), slightly shorter than header
+                     Vec4::new(1.0, 1.0, 1.0, 0.5),
+                     [1.0; 4],
+                     0.0
+                 );
+            }
+
+            // Sort Indicator
+            if let Some(sc) = sort_column {
+                if *sc == i {
+                     if let Some(dir) = sort_direction {
+                         let arrow = match dir {
+                             crate::data_source::SortDirection::Ascending => "▲",
+                             crate::data_source::SortDirection::Descending => "▼",
+                         };
+                         
+                         // Position at right edge of column
+                         // But we don't have exact text width of header label here easily.
+                         // Just put it at right - padding.
+                         let arrow_x = x + w - style.cell_padding;
+                         
+                         ctx.text.draw(
+                              ctx.device,
+                              ctx.queue,
+                              arrow,
+                              Vec2::new(arrow_x, pos.y + header_height * 0.5),
+                              10.0,
+                              Vec4::from(style.header_text_color),
+                              HorizontalAlign::Right,
+                              None
+                         );
+                     }
+                }
+            }
+           
+           if *show_vertical_lines && i > 0 {
+                // Draw line at x
+                ctx.primitives.draw_rect(
+                    Vec2::new(x, pos.y + bounds.height * 0.5),
+                    Vec2::new(style.grid_line_width * 0.5, bounds.height * 0.5),
+                    Vec4::from(style.grid_line_color),
+                    [0.0; 4],
+                    0.0
+                );
+           }
+           
+           x += w;
+       }
     }
 
     Widget::Checkbox { checked, style, bounds, size, .. } => {
@@ -742,9 +1225,77 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         }
         ctx.primitives.draw_circle(Vec2::new(pos.x + aw, cy), style.thumb_radius, Vec4::ONE, 0.0);
     }
+    Widget::Tree { id, bounds, root_nodes, selected_id, expanded_ids, style, .. } => {
+        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+        
+        // 1. Flatten visible nodes
+        let mut visible_rows = Vec::new();
+        flatten_tree(root_nodes, expanded_ids, 0, &mut visible_rows);
+        
+        let mut y = pos.y;
+        
+        for (node, depth) in visible_rows {
+             // Row Background
+             let row_rect = crate::Rect { 
+                 x: pos.x, 
+                 y, 
+                 width: bounds.width, 
+                 height: style.row_height 
+             };
+             
+             // Selection
+             if Some(&node.id) == selected_id.as_ref() {
+                 ctx.primitives.draw_rect(
+                     Vec2::new(row_rect.x + row_rect.width * 0.5, row_rect.y + row_rect.height * 0.5),
+                     Vec2::new(row_rect.width * 0.5, row_rect.height * 0.5),
+                     Vec4::from(style.selected_background),
+                     [0.0; 4],
+                     0.0
+                 );
+             }
+             
+             // Hover (Basic, from InteractionState)
+             // Need full ID for hit test correlation: format!("{}:node:{}", tree_id, node.id)
+             
+             let indent_x = pos.x + (depth as f32 * style.indent_size);
+             
+             // Expander
+             if !node.leaf && !node.children.is_empty() {
+                 let expanded = expanded_ids.contains(&node.id);
+                 let symbol = if expanded { "▼" } else { "►" };
+                 
+                 ctx.text.draw(
+                    ctx.device,
+                    ctx.queue,
+                    symbol,
+                    Vec2::new(indent_x + style.indent_size * 0.5, y + style.row_height * 0.5),
+                    style.font_size * 0.8,
+                    Vec4::from(style.icon_color),
+                    HorizontalAlign::Center,
+                    None
+                 );
+             }
+             
+             // Label
+             let label_x = indent_x + style.indent_size + 4.0;
+             render_text_field(
+                ctx,
+                &node.label,
+                Vec2::new(label_x, y + style.row_height * 0.5),
+                style.font_size,
+                style.text_color,
+                None,
+                TextAlign::Left,
+                Some(bounds.width - label_x),
+             );
+             
+             y += style.row_height;
+        }
+    }
   }
 }
 
+/// Convenience function to render a widget with the renderer.
 /// Convenience function to render a widget with the renderer.
 pub fn render_ui(
   widget: &Widget,
@@ -752,6 +1303,20 @@ pub fn render_ui(
   device: &wgpu::Device,
   queue: &wgpu::Queue,
   interaction: Option<&InteractionState>,
+  data_provider: Option<&dyn crate::data_source::DataProvider>,
+) {
+    render_ui_with_state(widget, renderer, device, queue, interaction, data_provider, None);
+}
+
+/// Renders a widget with optional state tracking for performance.
+pub fn render_ui_with_state(
+  widget: &Widget,
+  renderer: &mut crate::renderer::GloomyRenderer,
+  device: &wgpu::Device,
+  queue: &wgpu::Queue,
+  interaction: Option<&InteractionState>,
+  data_provider: Option<&dyn crate::data_source::DataProvider>,
+  widget_tracker: Option<&mut crate::widget_state::WidgetStateTracker>,
 ) {
   let size = renderer.size();
   let surface_width = size.x as u32;
@@ -759,7 +1324,7 @@ pub fn render_ui(
   
   let (primitives, text, images, textures) = renderer.split_mut();
   
-  let mut ctx = RenderContext::new(primitives, text, images, textures, device, queue, interaction, surface_width, surface_height);
+  let mut ctx = RenderContext::new(primitives, text, images, textures, device, queue, interaction, surface_width, surface_height, data_provider, widget_tracker);
   render_widget(widget, &mut ctx);
 }
 
@@ -774,7 +1339,6 @@ pub fn hit_test<'a>(
   match widget {
     Widget::Container { id, scrollable, bounds, children, .. } => {
       // Check if point is inside container bounds first (clipping check)
-      // If scrollable, hits outside should be ignored regardless of overflow.
       if *scrollable {
           if point.x < bounds.x || point.x > bounds.x + bounds.width ||
              point.y < bounds.y || point.y > bounds.y + bounds.height {
@@ -805,10 +1369,9 @@ pub fn hit_test<'a>(
       None
     }
     Widget::Button { bounds, action, .. } => {
-        // Simple bounding box check
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action })
+             Some(HitTestResult { widget, action: action.clone() })
            } else {
              None
            }
@@ -816,7 +1379,7 @@ pub fn hit_test<'a>(
     Widget::TextInput { bounds, id, .. } => {
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action: id })
+             Some(HitTestResult { widget, action: id.clone() })
            } else {
              None
            }
@@ -824,7 +1387,7 @@ pub fn hit_test<'a>(
     Widget::Checkbox { bounds, id, .. } => {
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action: id })
+             Some(HitTestResult { widget, action: id.clone() })
         } else {
              None
         }
@@ -832,7 +1395,7 @@ pub fn hit_test<'a>(
     Widget::Slider { bounds, id, .. } => {
          if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action: id })
+             Some(HitTestResult { widget, action: id.clone() })
         } else {
              None
         }
@@ -840,7 +1403,7 @@ pub fn hit_test<'a>(
     Widget::ToggleSwitch { bounds, id, .. } => {
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action: id })
+             Some(HitTestResult { widget, action: id.clone() })
         } else {
              None
         }
@@ -848,15 +1411,126 @@ pub fn hit_test<'a>(
     Widget::RadioButton { bounds, value, .. } => {
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action: value }) // Use value as action ID
+             Some(HitTestResult { widget, action: value.clone() })
         } else {
              None
         }
     }
+     Widget::Tree { id, bounds, root_nodes, expanded_ids, style, .. } => {
+          if point.x >= bounds.x && point.x <= bounds.x + bounds.width
+             && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
+               
+               let local_y = point.y - bounds.y;
+               if local_y < 0.0 { return None; }
+               
+               let row_index = (local_y / style.row_height) as usize;
+               
+               // Re-flatten to find the node at this index
+               let mut visible_rows = Vec::new();
+               flatten_tree(root_nodes, expanded_ids, 0, &mut visible_rows);
+               
+               if let Some((node, depth)) = visible_rows.get(row_index) {
+                   let wid = id.as_deref().unwrap_or("tree");
+                   
+                   // Check for X position (Expanded toggle vs Select)
+                   let indent_x = bounds.x + (*depth as f32 * style.indent_size);
+                   
+                   if point.x >= indent_x && point.x < indent_x + style.indent_size {
+                       // Toggle area
+                       return Some(HitTestResult { widget, action: format!("{}:toggle:{}", wid, node.id) });
+                   } else {
+                       // Select area (row)
+                       return Some(HitTestResult { widget, action: format!("{}:select:{}", wid, node.id) });
+                   }
+               }
+               None
+          } else {
+              None
+          }
+    }
+    Widget::DataGrid { bounds, id, header_height, row_height, columns, .. } => {
+         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
+            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
+              if let Some(wid) = id {
+                  let local_y = point.y - bounds.y;
+                  let local_x = point.x - bounds.x;
+                  
+                  // Header check
+                  if local_y < *header_height {
+                       // Determine column
+                       let content_width = (bounds.width).max(0.0);
+                       let mut col_widths = Vec::new();
+                       let mut total_fixed = 0.0;
+                       let mut total_flex = 0.0;
+                       
+                       for col in columns {
+                           match col.width {
+                               crate::datagrid::ColumnWidth::Fixed(w) => total_fixed += w,
+                               crate::datagrid::ColumnWidth::Flex(f) => total_flex += f,
+                               _ => {}
+                           }
+                       }
+                       
+                       let available = (content_width - total_fixed).max(0.0);
+                       
+                       for col in columns {
+                           let w = match col.width {
+                               crate::datagrid::ColumnWidth::Fixed(w) => w,
+                               crate::datagrid::ColumnWidth::Flex(f) => {
+                                   if total_flex > 0.0 {
+                                       (f / total_flex) * available
+                                   } else {
+                                       0.0
+                                   }
+                               },
+                               _ => 0.0,
+                           };
+                           col_widths.push(w);
+                       }
+                       
+                       let mut cx = 0.0;
+                       for (i, w) in col_widths.iter().enumerate() {
+                           let right_edge = cx + w;
+                           // Check for resize (Right edge) - 8px tolerance
+                           if (local_x - right_edge).abs() <= 8.0 && i < columns.len() {
+                               if columns[i].resizable {
+                                   return Some(HitTestResult { widget, action: format!("{}:header_resize:{}", wid, i) });
+                               }
+                           }
+                           
+                           if local_x >= cx && local_x < cx + w {
+                               return Some(HitTestResult { widget, action: format!("{}:header:{}", wid, i) });
+                           }
+                           cx += w;
+                       }
+                       
+                       return Some(HitTestResult { widget, action: wid.clone() });
+                  }
+                  
+                  let scroll_y = if let Some(offsets) = scroll_offsets {
+                       offsets.get(wid).map(|v| v.y).unwrap_or(0.0)
+                  } else { 0.0 };
+                  
+                  let content_y = local_y - header_height + scroll_y;
+                  if content_y >= 0.0 {
+                      let row = (content_y / row_height).floor() as isize;
+                      if row >= 0 {
+                           return Some(HitTestResult { widget, action: format!("{}:row:{}", wid, row) });
+                      }
+                  }
+                  
+                  Some(HitTestResult { widget, action: wid.clone() })
+              } else {
+                  None
+              }
+         } else {
+              None
+         }
+    }
     Widget::Dropdown { bounds, id, .. } => {
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
-             Some(HitTestResult { widget, action: id })
+             Some(HitTestResult { widget, action: id.clone() })
         } else {
              None
         }
@@ -940,7 +1614,7 @@ pub fn handle_interactions(
             }
         }
         
-        Widget::Checkbox { id, bounds, checked, .. } => {
+        Widget::Checkbox { id, checked, .. } => {
              // Check if clicked
              if ctx.clicked_id.as_deref() == Some(id) {
                  *checked = !*checked; // Toggle
@@ -975,6 +1649,20 @@ pub fn handle_interactions(
     }
     
     changed
+}
+
+fn flatten_tree<'a>(
+    nodes: &'a [crate::tree::TreeNode],
+    expanded: &std::collections::HashSet<String>,
+    depth: usize,
+    out: &mut Vec<(&'a crate::tree::TreeNode, usize)>
+) {
+    for node in nodes {
+        out.push((node, depth));
+        if expanded.contains(&node.id) {
+            flatten_tree(&node.children, expanded, depth + 1, out);
+        }
+    }
 }
 
 /// Handles keyboard events for the UI system.

@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
       let (primitives, text) = window.renderer.split_mut();
 
       // Render the loaded UI
-      render_ui(&ui, &mut window.renderer, ctx.device, ctx.queue, Some(&s));
+      render_ui(&ui, &mut window.renderer, ctx.device, ctx.queue, Some(Some(&s));s), None);
     })
     .run()
 }

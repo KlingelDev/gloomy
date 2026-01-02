@@ -10,6 +10,22 @@ use glam::{Vec2, Vec4};
 /// Default embedded font (Inter Regular).
 const DEFAULT_FONT: &[u8] = include_bytes!("fonts/Inter-Regular.ttf");
 
+// Inter font family (Variable fonts)
+const INTER_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/google/InterVariable.ttf");
+const INTER_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/InterVariable-Italic.ttf");
+
+// Roboto font family variants for rich text support
+const ROBOTO_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/google/Roboto-Regular.ttf");
+const ROBOTO_BOLD: &[u8] = include_bytes!("../../../assets/fonts/google/Roboto-Bold.ttf");
+const ROBOTO_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/Roboto-Italic.ttf");
+const ROBOTO_BOLD_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/Roboto-BoldItalic.ttf");
+
+// RobotoCondensed font family
+const ROBOTO_CONDENSED_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/google/RobotoCondensed-Regular.ttf");
+const ROBOTO_CONDENSED_BOLD: &[u8] = include_bytes!("../../../assets/fonts/google/RobotoCondensed-Bold.ttf");
+const ROBOTO_CONDENSED_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/RobotoCondensed-Italic.ttf");
+const ROBOTO_CONDENSED_BOLD_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/RobotoCondensed-BoldItalic.ttf");
+
 /// Main renderer managing GPU resources and render passes.
 pub struct GloomyRenderer {
   primitives: PrimitiveRenderer,
@@ -36,7 +52,25 @@ impl GloomyRenderer {
     height: u32,
   ) -> Self {
     let primitives = PrimitiveRenderer::new(device, format, width, height);
-    let text = TextRenderer::new(device, format, width, height, DEFAULT_FONT);
+    
+    // Load all available font families (10 fonts total)
+    let text = TextRenderer::new_with_all_families(
+      device,
+      format,
+      width,
+      height,
+      INTER_REGULAR,
+      INTER_ITALIC,
+      ROBOTO_REGULAR,
+      ROBOTO_BOLD,
+      ROBOTO_ITALIC,
+      ROBOTO_BOLD_ITALIC,
+      ROBOTO_CONDENSED_REGULAR,
+      ROBOTO_CONDENSED_BOLD,
+      ROBOTO_CONDENSED_ITALIC,
+      ROBOTO_CONDENSED_BOLD_ITALIC,
+    );
+    
     let images = ImageRenderer::new(device, format, width, height);
 
     Self {

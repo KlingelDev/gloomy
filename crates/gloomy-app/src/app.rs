@@ -29,6 +29,9 @@ pub type KeyboardInputFn = Box<dyn FnMut(&mut GloomyWindow, winit::event::KeyEve
 /// Callback for mouse wheel (scroll).
 pub type ScrollFn = Box<dyn FnMut(&mut GloomyWindow, winit::event::MouseScrollDelta, winit::event::TouchPhase)>;
 
+/// Callback for modifiers changed.
+pub type ModifiersChangedFn = Box<dyn FnMut(&mut GloomyWindow, winit::event::Modifiers)>;
+
 /// A gloomy application managing multiple windows.
 pub struct GloomyApp {
   draw_fn: Option<DrawFn>,
@@ -36,6 +39,7 @@ pub struct GloomyApp {
   mouse_input_fn: Option<MouseInputFn>,
   keyboard_input_fn: Option<KeyboardInputFn>,
   scroll_fn: Option<ScrollFn>,
+  modifiers_changed_fn: Option<ModifiersChangedFn>,
 }
 
 /// Runtime state during event loop.
@@ -56,6 +60,7 @@ impl GloomyApp {
       mouse_input_fn: None,
       keyboard_input_fn: None,
       scroll_fn: None,
+      modifiers_changed_fn: None,
     }
   }
 
@@ -106,6 +111,15 @@ impl GloomyApp {
     F: FnMut(&mut GloomyWindow, ElementState, MouseButton) + 'static,
   {
       self.mouse_input_fn = Some(Box::new(f));
+      self
+  }
+
+  /// Sets the modifiers changed callback.
+  pub fn on_modifiers_changed<F>(mut self, f: F) -> Self
+  where
+    F: FnMut(&mut GloomyWindow, winit::event::Modifiers) + 'static,
+  {
+      self.modifiers_changed_fn = Some(Box::new(f));
       self
   }
 
@@ -254,6 +268,14 @@ impl GloomyApp {
               log::debug!("Key pressed: {:?}", event.logical_key);
             }
           }
+        }
+      }
+
+      WindowEvent::ModifiersChanged(modifiers) => {
+        if let Some(win) = state.windows.get_mut(&window_id) {
+             if let Some(cb) = self.modifiers_changed_fn.as_mut() {
+                 cb(win, modifiers);
+             }
         }
       }
 

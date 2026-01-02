@@ -17,8 +17,25 @@ pub fn compute_layout(
       layout,
       padding,
       children,
+      layout_cache,
       ..
     } => {
+        // --- LAYOUT CACHING START ---
+        // Check if we can skip layout calculation
+        if let Some(cache) = layout_cache {
+            if cache.valid && 
+               (cache.input_width - _parent_width).abs() < 0.001 &&
+               (cache.input_height - _parent_height).abs() < 0.001 &&
+               (cache.parent_x - _parent_x).abs() < 0.001 &&
+               (cache.parent_y - _parent_y).abs() < 0.001 {
+                   
+                   // Cache Hit! Restore bounds and skip recursion.
+                   *bounds = cache.result_bounds;
+                   return;
+            }
+        }
+        // --- LAYOUT CACHING END ---
+
       // Effective content area
       let content_width = (bounds.width - *padding * 2.0).max(0.0);
       let content_height = (bounds.height - *padding * 2.0).max(0.0);
@@ -408,7 +425,17 @@ pub fn compute_layout(
             );
           }
         }
-      }
+        }
+      
+      // --- LAYOUT CACHING UPDATE ---
+      *layout_cache = Some(Box::new(crate::widget::LayoutCache {
+          input_width: _parent_width,
+          input_height: _parent_height,
+          parent_x: _parent_x,
+          parent_y: _parent_y,
+          result_bounds: *bounds,
+          valid: true,
+      }));
     }
     _ => {
       // Leaf widgets
@@ -435,8 +462,32 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::ProgressBar { flex, .. } => *flex,
     Widget::RadioButton { flex, .. } => *flex,
     Widget::Dropdown { flex, .. } => *flex,
+    Widget::Tree { flex, .. } => *flex,
   }
 }
+
+fn calculate_tree_height(nodes: &[crate::tree::TreeNode], expanded: &std::collections::HashSet<String>, row_height: f32) -> f32 {
+    let mut count = 0;
+    for node in nodes {
+        count += 1;
+        if expanded.contains(&node.id) {
+            count += calculate_tree_height_recursive(&node.children, expanded);
+        }
+    }
+    count as f32 * row_height
+}
+
+fn calculate_tree_height_recursive(nodes: &[crate::tree::TreeNode], expanded: &std::collections::HashSet<String>) -> usize {
+    let mut count = 0;
+    for node in nodes {
+        count += 1; // Self
+        if expanded.contains(&node.id) {
+             count += calculate_tree_height_recursive(&node.children, expanded);
+        }
+    }
+    count
+}
+
 
 // Helper to get fixed/intrinsic size
 fn get_fixed_size(widget: &Widget) -> (f32, f32) {
@@ -539,6 +590,10 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         let h = if let Some(h) = height { *h } else { 32.0 };
         (w, h)
     },
+    Widget::Tree { bounds, root_nodes, expanded_ids, style, .. } => {
+         let h = calculate_tree_height(root_nodes, expanded_ids, style.row_height);
+         (bounds.width.max(200.0), h.max(style.row_height))
+    },
   }
 }
 
@@ -625,6 +680,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
         bounds.width = w;
         bounds.height = h;
     }
+    Widget::Tree { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
   }
 }
 
@@ -692,6 +751,10 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
         bounds.x = x;
         bounds.y = y;
     }
+    Widget::Tree { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
   }
 }
 
@@ -706,6 +769,7 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::Divider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Scrollbar { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::DataGrid { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Tree { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Checkbox { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Slider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Image { grid_col, .. } => grid_col.unwrap_or(0),
@@ -736,6 +800,7 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::ProgressBar { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::RadioButton { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Dropdown { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::Tree { grid_row, .. } => grid_row.unwrap_or(0),
   }
 }
 
@@ -759,6 +824,7 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::ProgressBar { grid_col, .. } => *grid_col,
     Widget::RadioButton { grid_col, .. } => *grid_col,
     Widget::Dropdown { grid_col, .. } => *grid_col,
+    Widget::Tree { grid_col, .. } => *grid_col,
   }
 }
 
@@ -781,6 +847,7 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::ProgressBar { grid_row, .. } => *grid_row,
     Widget::RadioButton { grid_row, .. } => *grid_row,
     Widget::Dropdown { grid_row, .. } => *grid_row,
+    Widget::Tree { grid_row, .. } => *grid_row,
   }
 }
 
@@ -803,6 +870,7 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::ProgressBar { col_span, .. } => *col_span,
     Widget::RadioButton { col_span, .. } => *col_span,
     Widget::Dropdown { col_span, .. } => *col_span,
+    Widget::Tree { col_span, .. } => *col_span,
   }
 }
 
@@ -820,10 +888,11 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::DataGrid { row_span, .. } => *row_span,
     Widget::Checkbox { row_span, .. } => *row_span,
     Widget::Slider { row_span, .. } => *row_span,
+    Widget::Dropdown { row_span, .. } => *row_span,
     Widget::ToggleSwitch { row_span, .. } => *row_span,
     Widget::ProgressBar { row_span, .. } => *row_span,
     Widget::RadioButton { row_span, .. } => *row_span,
+    Widget::Tree { row_span, .. } => *row_span,
     Widget::Button { row_span, .. } => *row_span,
-    Widget::Dropdown { row_span, .. } => *row_span,
   }
 }

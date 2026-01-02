@@ -3,6 +3,7 @@
 //! Widgets can be deserialized from RON files for declarative UI layouts.
 
 use crate::layout::Layout;
+use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
 
 /// RGBA color as tuple for serde.
@@ -42,6 +43,48 @@ impl Default for Orientation {
   fn default() -> Self {
     Self::Horizontal
   }
+}
+
+/// Architecture: Layout Caching
+/// Stores inputs and results of the last layout calculation.
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct LayoutCache {
+    /// Input width constraint
+    pub input_width: f32,
+    /// Input height constraint
+    pub input_height: f32,
+    /// Parent x position (invalidation trigger)
+    pub parent_x: f32,
+    /// Parent y position (invalidation trigger)
+    pub parent_y: f32,
+    /// Resulting bounds
+    pub result_bounds: WidgetBounds,
+    /// Whether the cache is valid
+    pub valid: bool,
+}
+
+/// Architecture: Render Caching
+/// Stores a snapshot of the rendering commands produced by a widget tree.
+#[derive(Clone, Default)]
+pub struct RenderCache {
+    pub primitives: Option<crate::primitives::PrimitiveSnapshot>,
+    pub text: Option<crate::text::TextSnapshot>,
+    pub images: Option<crate::image_renderer::ImageSnapshot>,
+    pub base_offset: glam::Vec2,
+}
+
+// Implement Debug manually if needed, or omit Debug for Snapshots if they are large/complex.
+// Assuming Snapshots implement Debug (I added Debug to them or they are simple enough).
+// ImageSnapshot needs Clone (I added it). Primitive/Text had Debug?
+// I added Debug to PrimitiveSnapshot and TextSnapshot.
+// ImageSnapshot I added Clone but maybe not Debug?
+// Let's implement non-derived Debug for RenderCache to be safe.
+impl std::fmt::Debug for RenderCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RenderCache")
+         .field("base_offset", &self.base_offset)
+         .finish_non_exhaustive()
+    }
 }
 
 /// A UI widget that can be rendered.
@@ -88,6 +131,13 @@ pub enum Widget {
     row_span: usize,
     #[serde(default)]
     children: Vec<Widget>,
+
+    /// Internal cache for high-performance layout skipping.
+    #[serde(skip)]
+    layout_cache: Option<Box<LayoutCache>>,
+    /// Internal cache for high-performance rendering.
+    #[serde(skip)]
+    render_cache: RefCell<Option<Box<RenderCache>>>,
   },
 
   /// Text label widget.
@@ -157,6 +207,40 @@ pub enum Widget {
     row_span: usize,
     #[serde(default)]
     font: Option<String>,
+  },
+
+  /// Tree Widget
+  Tree {
+      #[serde(default)]
+      id: Option<String>,
+      #[serde(default)]
+      bounds: WidgetBounds,
+      
+      // Data
+      #[serde(default)]
+      root_nodes: Vec<crate::tree::TreeNode>,
+      
+      // State
+      #[serde(default)]
+      selected_id: Option<String>,
+      #[serde(default)]
+      expanded_ids: std::collections::HashSet<String>,
+      
+      // Style
+      #[serde(default)]
+      style: crate::tree::TreeStyle,
+      
+      // Layout
+      #[serde(default)]
+      flex: f32,
+      #[serde(default)]
+      grid_col: Option<usize>,
+      #[serde(default)]
+      grid_row: Option<usize>,
+      #[serde(default = "default_span_one")]
+      col_span: usize,
+      #[serde(default = "default_span_one")]
+      row_span: usize,
   },
 
   /// Toggle switch widget.
@@ -330,6 +414,8 @@ pub enum Widget {
   /// Data grid for displaying tabular data.
   DataGrid {
     #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
     bounds: WidgetBounds,
     columns: Vec<crate::datagrid::ColumnDef>,
     #[serde(default)]
@@ -346,6 +432,12 @@ pub enum Widget {
     show_vertical_lines: bool,
     #[serde(default)]
     show_horizontal_lines: bool,
+    #[serde(default)]
+    selected_rows: Vec<usize>,
+    #[serde(default)]
+    sort_column: Option<usize>,
+    #[serde(default)]
+    sort_direction: Option<crate::data_source::SortDirection>,
     #[serde(default)]
     style: crate::datagrid::DataGridStyle,
     #[serde(default)]
@@ -587,7 +679,23 @@ impl Widget {
       col_span: 1,
       row_span: 1,
       children: Vec::new(),
+      layout_cache: None,
+      render_cache: RefCell::new(None),
     }
+  }
+
+  /// Explicitly invalidates the layout cache for this widget and its subtree.
+  /// Should be called whenever the widget structure or style changes.
+  pub fn mark_dirty(&mut self) {
+      if let Widget::Container { layout_cache, render_cache, children, .. } = self {
+          *layout_cache = None;
+          *render_cache.borrow_mut() = None;
+          for child in children {
+              child.mark_dirty();
+          }
+      }
+      // For other widgets (leaves), there is no cache to clear, 
+      // but if we add caching to leaf nodes later, we'd clear it here.
   }
 
   /// Creates a new label widget.
@@ -629,6 +737,7 @@ impl Widget {
           Widget::Divider { bounds, .. } => *bounds,
           Widget::Scrollbar { bounds, .. } => *bounds,
           Widget::DataGrid { bounds, .. } => *bounds,
+          Widget::Tree { bounds, .. } => *bounds,
       }
   }
 

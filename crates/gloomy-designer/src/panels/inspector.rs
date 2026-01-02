@@ -32,7 +32,7 @@ pub fn create_property_widgets(
                 Widget::Icon { .. } => {
                     children.push(Widget::label("Type: Icon"));
                 }
-                Widget::Container { 
+                Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), 
                     id, width, height, background, padding, ..
                 } => {
                     children.push(Widget::label("Type: Container"));

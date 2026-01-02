@@ -11,6 +11,20 @@ use std::fmt;
 /// Implement this trait to create custom data sources for the
 /// DataGrid widget. The trait allows for efficient data access
 /// and supports sorting.
+/// Sort direction for DataGrid columns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortDirection {
+    /// Ascending order (A-Z, 0-9)
+    Ascending,
+    /// Descending order (Z-A, 9-0)
+    Descending,
+}
+
+/// Trait for providing tabular data to widgets.
+///
+/// Implement this trait to create custom data sources for the
+/// DataGrid widget. The trait allows for efficient data access
+/// and supports sorting.
 pub trait DataSource: Send + Sync {
     /// Returns the total number of rows in the data source.
     fn row_count(&self) -> usize;
@@ -30,6 +44,15 @@ pub trait DataSource: Send + Sync {
     /// Default implementation returns Text variant of cell_text.
     fn cell_value(&self, row: usize, col: usize) -> CellValue {
         CellValue::Text(self.cell_text(row, col))
+    }
+
+    /// Sorts the data by the specified column.
+    ///
+    /// # Arguments
+    /// * `col` - Zero-based column index
+    /// * `direction` - Sort direction
+    fn sort(&mut self, _col: usize, _direction: SortDirection) {
+        // Default implementation does nothing
     }
 }
 
@@ -146,7 +169,63 @@ impl DataSource for VecDataSource {
             .cloned()
             .unwrap_or(CellValue::None)
     }
+
+    fn sort(&mut self, col: usize, direction: SortDirection) {
+        self.rows.sort_by(|a, b| {
+            let val_a = a.get(col).unwrap_or(&CellValue::None);
+            let val_b = b.get(col).unwrap_or(&CellValue::None);
+            let cmp = val_a.partial_cmp(val_b).unwrap_or(std::cmp::Ordering::Equal);
+            match direction {
+                SortDirection::Ascending => cmp,
+                SortDirection::Descending => cmp.reverse(),
+            }
+        });
+    }
 }
+
+/// Trait for looking up data sources by ID.
+pub trait DataProvider: Send + Sync {
+    /// Gets a data source by ID.
+    fn get_source(&self, id: &str) -> Option<&dyn DataSource>;
+    /// Gets a mutable data source by ID.
+    fn get_source_mut(&mut self, id: &str) -> Option<&mut (dyn DataSource + 'static)>;
+}
+
+/// Simple HashMap-based data provider.
+pub struct MapDataProvider {
+    sources: std::collections::HashMap<String, Box<dyn DataSource>>,
+}
+
+impl MapDataProvider {
+    /// Creates a new empty MapDataProvider.
+    pub fn new() -> Self {
+        Self {
+            sources: std::collections::HashMap::new(),
+        }
+    }
+    
+    /// Registers a data source with an ID.
+    pub fn register<S: DataSource + 'static>(&mut self, id: impl Into<String>, source: S) {
+        self.sources.insert(id.into(), Box::new(source));
+    }
+}
+
+impl DataProvider for MapDataProvider {
+    fn get_source(&self, id: &str) -> Option<&dyn DataSource> {
+        self.sources.get(id).map(|b| b.as_ref())
+    }
+
+    fn get_source_mut(&mut self, id: &str) -> Option<&mut (dyn DataSource + 'static)> {
+        self.sources.get_mut(id).map(move |b| b.as_mut())
+    }
+}
+
+impl Default for MapDataProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
             let (w, h) = (win.config.width as f32, win.config.height as f32);
             
             // Define UI
-            let mut ui = Widget::Container {
+            let mut ui = Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                 id: Some("root".to_string()),
                 scrollable: true,
                 bounds: WidgetBounds { x: 0.0, y: 0.0, width: w, height: h },
@@ -63,7 +63,7 @@ fn main() -> anyhow::Result<()> {
                     Widget::label("Advanced Visuals Showcase"),
                     
                     // --- 1. Gradient Borders ---
-                    Widget::Container {
+                    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                          id: None,
                          scrollable: false,
                          bounds: WidgetBounds::default(),
@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
                     },
 
                     // --- 2. Neon Glow Effect ---
-                    Widget::Container {
+                    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                          id: None,
                          scrollable: false,
                          bounds: WidgetBounds::default(),

@@ -27,6 +27,9 @@ pub mod style;
 pub mod style_context;
 pub mod data_source;
 pub mod datagrid;
+pub mod tree;
+pub mod rich_text;
+pub mod widget_state;
 
 pub use container::Container;
 pub use glam::{Vec2, Vec4};
@@ -44,3 +47,5 @@ pub use widget::{Widget, WidgetBounds};
 pub use theme::{Theme, ColorPalette};
 pub use style::GlobalStyle;
 pub use style_context::StyleContext;
+pub use data_source::{DataSource, CellValue, VecDataSource};
+pub use datagrid::{ColumnDef, ColumnWidth, DataGrid, DataGridStyle, SelectionMode, SortDirection};

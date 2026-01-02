@@ -105,7 +105,7 @@ fn main() -> anyhow::Result<()> {
             let height = win.config.height as f32;
             
             // Ensure root fills window
-            if let Widget::Container { bounds, .. } = &mut s.app.ui_root {
+            if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), bounds, .. } = &mut s.app.ui_root {
                 bounds.x = 0.0;
                 bounds.y = 0.0;
                 bounds.width = width;

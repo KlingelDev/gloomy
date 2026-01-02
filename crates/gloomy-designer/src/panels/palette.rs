@@ -50,7 +50,7 @@ impl WidgetType {
     /// Creates a new instance of this widget type.
     pub fn create(&self) -> Widget {
         match self {
-            WidgetType::Container => Widget::Container {
+            WidgetType::Container => Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                 id: Some("new_container".to_string()),
                 scrollable: false,
                 bounds: WidgetBounds { 

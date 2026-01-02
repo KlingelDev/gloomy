@@ -69,7 +69,7 @@ impl DesignerApp {
     
     /// Adds a widget to the current design.
     fn add_widget_to_design(&mut self, widget: Widget) {
-        if let Widget::Container { children, .. } = &mut self.design.root {
+        if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children, .. } = &mut self.design.root {
             children.push(widget);
             // Select the newly added widget
             self.selected_index = Some(children.len() - 1);
@@ -79,7 +79,7 @@ impl DesignerApp {
     
     /// Deletes widget at index.
     fn delete_widget_at(&mut self, index: usize) {
-        if let Widget::Container { children, .. } = &mut self.design.root {
+        if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children, .. } = &mut self.design.root {
             if index < children.len() {
                 children.remove(index);
                 self.selected_index = None;
@@ -90,7 +90,7 @@ impl DesignerApp {
     
     /// Returns the currently selected widget.
     fn get_selected_widget(&self) -> Option<&Widget> {
-        if let Widget::Container { children, .. } = &self.design.root {
+        if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children, .. } = &self.design.root {
             self.selected_index.and_then(|idx| children.get(idx))
         } else {
             None
@@ -108,7 +108,7 @@ impl DesignerApp {
     fn update_canvas_children(&mut self) {
         // Clone data we need to avoid borrow conflicts
         let selected_index = self.selected_index;
-        let design_children: Vec<Widget> = if let Widget::Container { 
+        let design_children: Vec<Widget> = if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), 
             children, .. 
         } = &self.design.root {
             children.clone()
@@ -126,9 +126,9 @@ impl DesignerApp {
         };
         
         // Now mutate ui_root
-        if let Widget::Container { children, .. } = &mut self.ui_root {
-            if let Some(Widget::Container { children: center, .. }) = children.get_mut(1) {
-                if let Some(Widget::Container { children: canvas, .. }) = center.get_mut(0) {
+        if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children, .. } = &mut self.ui_root {
+            if let Some(Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children: center, .. }) = children.get_mut(1) {
+                if let Some(Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children: canvas, .. }) = center.get_mut(0) {
                     *canvas = new_canvas;
                 }
             }
@@ -148,7 +148,7 @@ impl DesignerApp {
             None
         };
         
-        Widget::Container {
+        Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some(format!("wrapper_{}", index)),
             scrollable: false,
             bounds: WidgetBounds::default(),
@@ -205,13 +205,13 @@ impl DesignerApp {
 
     /// Updates the tree panel to show widget hierarchy.
     fn update_tree_children(&mut self) {
-        if let Widget::Container { children, .. } = &mut self.ui_root {
-            if let Some(Widget::Container { children: center, .. }) = children.get_mut(1) {
-                if let Some(Widget::Container { children: tree, .. }) = center.get_mut(1) {
+        if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children, .. } = &mut self.ui_root {
+            if let Some(Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children: center, .. }) = children.get_mut(1) {
+                if let Some(Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children: tree, .. }) = center.get_mut(1) {
                     tree.clear();
                     tree.push(Widget::label("WIDGET TREE"));
                     
-                    if let Widget::Container { children: design_c, .. } = &self.design.root {
+                    if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children: design_c, .. } = &self.design.root {
                         tree.push(Widget::label(format!(
                             "▼ Container (root) [{}]", 
                             design_c.len()
@@ -233,8 +233,8 @@ impl DesignerApp {
         let selected = self.get_selected_widget().cloned();
         let props = create_property_widgets(selected.as_ref(), self.selected_index);
         
-        if let Widget::Container { children, .. } = &mut self.ui_root {
-            if let Some(Widget::Container { children: inspector, .. }) = children.get_mut(2) {
+        if let Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children, .. } = &mut self.ui_root {
+            if let Some(Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), children: inspector, .. }) = children.get_mut(2) {
                 *inspector = props;
             }
         }
@@ -243,7 +243,7 @@ impl DesignerApp {
     /// Returns a type name for display.
     fn widget_type_name(widget: &Widget) -> &'static str {
         match widget {
-            Widget::Container { .. } => "Container",
+            Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None), .. } => "Container",
             Widget::Label { .. } => "Label",
             Widget::Button { .. } => "Button",
             Widget::TextInput { .. } => "TextInput",
@@ -257,7 +257,7 @@ impl DesignerApp {
 
     /// Creates the designer's own UI layout.
     fn create_designer_ui() -> Widget {
-        Widget::Container {
+        Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some("designer_root".to_string()),
             scrollable: false,
             bounds: WidgetBounds {
@@ -300,7 +300,7 @@ impl DesignerApp {
             palette_children.push(create_palette_item(*widget_type));
         }
         
-        Widget::Container {
+        Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some("palette".to_string()),
             scrollable: true,
             bounds: WidgetBounds::default(),
@@ -328,7 +328,7 @@ impl DesignerApp {
     }
     
     fn create_center_panel() -> Widget {
-        Widget::Container {
+        Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some("center".to_string()),
             scrollable: false,
             bounds: WidgetBounds::default(),
@@ -351,7 +351,7 @@ impl DesignerApp {
                 ..Default::default()
             },
             children: vec![
-                Widget::Container {
+                Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                     id: Some("canvas".to_string()),
                     scrollable: true,
                     bounds: WidgetBounds::default(),
@@ -378,7 +378,7 @@ impl DesignerApp {
                         Widget::label("Click widgets in palette to add"),
                     ],
                 },
-                Widget::Container {
+                Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                     id: Some("tree".to_string()),
                     scrollable: true,
                     bounds: WidgetBounds::default(),
@@ -411,7 +411,7 @@ impl DesignerApp {
     }
     
     fn create_inspector_panel() -> Widget {
-        Widget::Container {
+        Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some("inspector".to_string()),
             scrollable: true,
             bounds: WidgetBounds::default(),

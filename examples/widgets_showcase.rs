@@ -81,7 +81,7 @@ fn main() -> anyhow::Result<()> {
                 l
             };
 
-            let mut ui = Widget::Container {
+            let mut ui = Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                 id: Some("root".to_string()),
                 scrollable: true,
                 bounds: WidgetBounds { x: 0.0, y: 0.0, width: w, height: h }, 
@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
                     
                     // --- Toggles ---
                     Widget::label("1. Toggle Switches"),
-                    Widget::Container {
+                    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                         layout: Layout { direction: Direction::Row, spacing: 20.0, align_items: Align::Center, ..Default::default() },
                         children: vec![
                             Widget::ToggleSwitch {
@@ -148,7 +148,7 @@ fn main() -> anyhow::Result<()> {
                     
                     // --- Radio Buttons ---
                     Widget::label("3. Radio Buttons"),
-                    Widget::Container {
+                    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                         layout: Layout { direction: Direction::Row, spacing: 10.0, align_items: Align::Center, ..Default::default() },
                         children: vec![
                              Widget::RadioButton {

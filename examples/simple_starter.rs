@@ -61,13 +61,13 @@ fn main() -> anyhow::Result<()> {
                     s.interaction.set_active(Some(action.clone()));
                 }
             } else {
-                if let Some(ref action) = s.interaction.active_action.clone() {
+                if let Some(action) = s.interaction.active_action.clone() {
                     let mouse_pos = s.interaction.mouse_pos;
                     let scroll_offsets = s.interaction.scroll_offsets.clone();
                     
                     if let Some(res) = hit_test(&s.ui_root, mouse_pos, Some(&scroll_offsets)) {
                         if res.action == action {
-                            s.handle_click(action);
+                            s.handle_click(&action);
                             s.rebuild_ui();
                         }
                     }
@@ -97,6 +97,7 @@ fn main() -> anyhow::Result<()> {
                 ctx.device,
                 ctx.queue,
                 Some(&s.interaction),
+                None,
             );
         })
         .run()
@@ -125,7 +126,7 @@ impl AppState {
 }
 
 fn create_ui(counter: i32) -> Widget {
-    Widget::Container {
+    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
         id: Some("main".to_string()),
         scrollable: false,
         bounds: WidgetBounds::default(),

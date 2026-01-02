@@ -103,9 +103,9 @@ impl InteractionState {
   }
 
   /// Update state based on hit test result.
-  pub fn handle_hit(&mut self, hit: Option<&HitTestResult>) {
-      if let Some(h) = hit {
-          self.hovered_action = Some(h.action.to_string());
+  pub fn handle_hit(&mut self, action_id: Option<String>) {
+      if let Some(act) = action_id {
+          self.hovered_action = Some(act);
           if self.is_pressed {
               self.active_action = self.hovered_action.clone();
               self.focused_id = self.hovered_action.clone();
@@ -122,5 +122,5 @@ impl InteractionState {
 /// Hit test result.
 pub struct HitTestResult<'a> {
   pub widget: &'a Widget,
-  pub action: &'a str,
+  pub action: String,
 }

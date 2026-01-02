@@ -69,13 +69,13 @@ fn main() -> anyhow::Result<()> {
                 }
             } else {
                 // Released - check for click trigger
-                if let Some(ref action) = s.interaction.active_action.clone() {
+                if let Some(action) = s.interaction.active_action.clone() {
                      let mouse_pos = s.interaction.mouse_pos;
                      let scroll_offsets = s.interaction.scroll_offsets.clone();
                      
                      if let Some(res) = hit_test(&s.ui_root, mouse_pos, Some(&scroll_offsets)) {
                          if res.action == action {
-                             s.handle_click(action);
+                             s.handle_click(&action);
                              // Re-create UI to reflect state changes
                              s.rebuild_ui();
                          }
@@ -146,6 +146,7 @@ fn main() -> anyhow::Result<()> {
                 ctx.device,
                 ctx.queue,
                 Some(&s.interaction),
+                None
             );
         })
         .run()
@@ -174,7 +175,7 @@ impl AppState {
     
     fn rebuild_ui(&mut self) {
         // Simple immediate mode style: recreate UI on state change
-        self.ui_root = Widget::Container {
+        self.ui_root = Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: None,
             scrollable: false,
             bounds: WidgetBounds::default(),

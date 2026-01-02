@@ -45,6 +45,7 @@ fn main() -> anyhow::Result<()> {
                 ctx.device,
                 ctx.queue,
                 Some(&s.interaction),
+                None,
             );
         })
         .run()
@@ -75,7 +76,6 @@ fn create_ui(vertical_scroll: f32, horizontal_scroll: f32) -> Widget {
     let viewport_height = 400.0;
     let viewport_width = 600.0;
     
-    Widget::Container {
         id: Some("root".to_string()),
         scrollable: false,
         bounds: WidgetBounds::default(),
@@ -118,7 +118,6 @@ fn create_ui(vertical_scroll: f32, horizontal_scroll: f32) -> Widget {
             },
             
             // Vertical scrollbar section
-            Widget::Container {
                 id: Some("vertical_section".to_string()),
                 scrollable: false,
                 bounds: WidgetBounds::default(),
@@ -160,7 +159,6 @@ fn create_ui(vertical_scroll: f32, horizontal_scroll: f32) -> Widget {
                     },
                     
                     // Scrollable area container
-                    Widget::Container {
                         id: Some("scrollable".to_string()),
                         scrollable: false,
                         bounds: WidgetBounds::default(),
@@ -185,7 +183,6 @@ fn create_ui(vertical_scroll: f32, horizontal_scroll: f32) -> Widget {
                         corner_radii: None,
                         children: vec![
                             // Content area
-                            Widget::Container {
                                 id: Some("content".to_string()),
                                 scrollable: false,
                                 bounds: WidgetBounds::default(),
@@ -265,7 +262,6 @@ fn create_ui(vertical_scroll: f32, horizontal_scroll: f32) -> Widget {
             },
             
             // Horizontal scrollbar section
-            Widget::Container {
                 id: Some("horizontal_section".to_string()),
                 scrollable: false,
                 bounds: WidgetBounds::default(),
@@ -307,7 +303,6 @@ fn create_ui(vertical_scroll: f32, horizontal_scroll: f32) -> Widget {
                     },
                     
                     // Horizontal scrollbar container
-                    Widget::Container {
                         id: Some("horizontal_area".to_string()),
                         scrollable: false,
                         bounds: WidgetBounds::default(),

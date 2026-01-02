@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     
     let state = Rc::new(RefCell::new(AppState {
-        ui_root: Widget::Container {
+        ui_root: Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some("root".to_string()),
             scrollable: false,
             bounds: WidgetBounds::default(),
@@ -88,13 +88,13 @@ fn main() -> anyhow::Result<()> {
                     s.interaction.set_active(Some(action.clone()));
                 }
             } else {
-                if let Some(ref action) = s.interaction.active_action.clone() {
+                if let Some(action) = s.interaction.active_action.clone() {
                     let mouse_pos = s.interaction.mouse_pos;
                     let scroll_offsets = s.interaction.scroll_offsets.clone();
                     
                     if let Some(res) = hit_test(&s.ui_root, mouse_pos, Some(&scroll_offsets)) {
                         if res.action == action {
-                            s.handle_click(action);
+                            s.handle_click(&action);
                             s.rebuild_ui();
                         }
                     }
@@ -121,6 +121,7 @@ fn main() -> anyhow::Result<()> {
                 ctx.device,
                 ctx.queue,
                 Some(&s.interaction),
+                None,
             );
         })
         .run()
@@ -171,7 +172,7 @@ impl AppState {
         let warning = theme.colors.warning;
         let error = theme.colors.error;
         
-        self.ui_root = Widget::Container {
+        self.ui_root = Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
             id: Some("root".to_string()),
             scrollable: false,
             bounds: WidgetBounds::default(),
@@ -259,7 +260,7 @@ impl AppState {
                 },
                 
                 // Color palette display
-                Widget::Container {
+                Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                     id: Some("palette".to_string()),
                     scrollable: false,
                     bounds: WidgetBounds::default(),
@@ -310,7 +311,7 @@ impl AppState {
 }
 
 fn create_color_box(label: &str, color: (f32, f32, f32, f32), style: &GlobalStyle) -> Widget {
-    Widget::Container {
+    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
         id: None,
         scrollable: false,
         bounds: WidgetBounds::default(),

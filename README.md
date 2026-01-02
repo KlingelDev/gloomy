@@ -175,7 +175,7 @@ Layout {
 - **Icon** - Icon rendering
 - **SVGImage** - Vector graphics
 - **Divider** - Visual separator
-- **Spacer** - Layout spacing
+- **DataGrid** - Feature-rich table with sorting, resizing, [Documentation](docs/datagrid.md)
 
 ### Widget Styling
 

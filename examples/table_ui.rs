@@ -90,10 +90,10 @@ fn main() -> anyhow::Result<()> {
 
         // Ensure root fills window
         if let Widget::Container { bounds, .. } = &mut s.root {
-            bounds.x = 0.0;
-            bounds.y = 0.0;
-            bounds.width = width;
-            bounds.height = height;
+             bounds.x = 0.0;
+             bounds.y = 0.0;
+             bounds.width = width;
+             bounds.height = height;
         }
 
         compute_layout(&mut s.root, 0.0, 0.0, width, height);
@@ -107,7 +107,8 @@ fn main() -> anyhow::Result<()> {
             &mut win.renderer, 
             ctx.device, 
             ctx.queue, 
-            Some(&s.interaction)
+            Some(&s.interaction),
+            None
         );
     })
     .run()?;

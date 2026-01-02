@@ -17,11 +17,12 @@ struct GlobalUniforms {
     screen_size: Vec2,
 }
 
-struct Batch {
-    bind_group: wgpu::BindGroup,
-    start_index: u32,
-    count: u32,
-    scissor: Option<(u32, u32, u32, u32)>,
+#[derive(Clone)]
+pub struct Batch {
+    pub bind_group: std::sync::Arc<wgpu::BindGroup>,
+    pub start_index: u32,
+    pub count: u32,
+    pub scissor: Option<(u32, u32, u32, u32)>,
 }
 
 pub struct ImageRenderer {
@@ -230,7 +231,7 @@ impl ImageRenderer {
         self.instances.push(instance);
         
         self.batches.push(Batch {
-            bind_group: bg,
+            bind_group: std::sync::Arc::new(bg),
             start_index,
             count: 1,
             scissor: self.current_scissor,
@@ -299,4 +300,52 @@ impl ImageRenderer {
         self.instances.clear();
         self.batches.clear();
     }
+
+    // --- CAPTURE / REPLAY ---
+
+    pub fn get_counts(&self) -> (usize, usize) {
+        (self.instances.len(), self.batches.len())
+    }
+
+    pub fn capture(&self, start_instance: usize, start_batch: usize) -> ImageSnapshot {
+        // Clone instances
+        let mut instances = Vec::new();
+        if start_instance < self.instances.len() {
+            instances.extend_from_slice(&self.instances[start_instance..]);
+        }
+
+        // Clone batches
+        let mut batches = Vec::new();
+        if start_batch < self.batches.len() {
+            for batch in &self.batches[start_batch..] {
+                let mut b = batch.clone();
+                b.start_index -= start_instance as u32; // Normalize index relative to snapshot
+                batches.push(b);
+            }
+        }
+        
+        ImageSnapshot { instances, batches }
+    }
+
+    pub fn replay(&mut self, snapshot: &ImageSnapshot, offset: Vec2) {
+        let start_instance = self.instances.len() as u32;
+
+        for instance in &snapshot.instances {
+            let mut i = *instance;
+            i.pos += offset;
+            self.instances.push(i);
+        }
+
+        for batch in &snapshot.batches {
+            let mut b = batch.clone();
+            b.start_index += start_instance; // Shift index to current buffer
+            self.batches.push(b);
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ImageSnapshot {
+    pub instances: Vec<ImageInstance>,
+    pub batches: Vec<Batch>,
 }

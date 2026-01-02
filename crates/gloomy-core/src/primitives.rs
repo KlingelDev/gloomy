@@ -374,9 +374,61 @@ impl PrimitiveRenderer {
          render_pass.draw(0..6, batch.range.clone());
     }
 
-    self.instances.clear();
     self.batches.clear();
     // Keep current_scissor or reset? Reset is safer per frame.
     self.current_scissor = None;
   }
+
+  // --- CAPTURE / REPLAY ---
+
+  pub fn get_counts(&self) -> (usize, usize) {
+      (self.instances.len(), self.batches.len())
+  }
+
+  pub fn capture(&self, start_instance: usize, start_batch: usize) -> PrimitiveSnapshot {
+      // Clone instances
+      let mut instances = Vec::new();
+      if start_instance < self.instances.len() {
+          instances.extend_from_slice(&self.instances[start_instance..]);
+      }
+
+      // Clone batches
+      let mut batches = Vec::new();
+      if start_batch < self.batches.len() {
+          for batch in &self.batches[start_batch..] {
+              let mut b = batch.clone();
+              b.range.start -= start_instance as u32;
+              b.range.end -= start_instance as u32;
+              batches.push(b);
+          }
+      }
+
+      PrimitiveSnapshot { instances, batches }
+  }
+
+  pub fn replay(&mut self, snapshot: &PrimitiveSnapshot, offset: Vec2) {
+      let start_instance = self.instances.len() as u32;
+
+      for instance in &snapshot.instances {
+          let mut i = *instance;
+          i.pos_a += offset;
+          if i.prim_type == 2 { // Line
+              i.pos_b += offset;
+          }
+          self.instances.push(i);
+      }
+
+      for batch in &snapshot.batches {
+          let mut b = batch.clone();
+          b.range.start += start_instance;
+          b.range.end += start_instance;
+          self.batches.push(b);
+      }
+  }
+}
+
+#[derive(Clone, Debug)]
+pub struct PrimitiveSnapshot {
+    pub instances: Vec<Instance>,
+    pub batches: Vec<Batch>,
 }

@@ -40,6 +40,7 @@ fn main() -> anyhow::Result<()> {
                 ctx.device,
                 ctx.queue,
                 Some(&s.interaction),
+                None,
             );
         })
         .run()
@@ -63,7 +64,7 @@ fn create_ui() -> Widget {
     let long_text = "This is a very long text that would definitely overflow the container bounds if text clipping was not working properly. It just keeps going and going with no end in sight!";
     let medium_text = "This text is moderately long and should be clipped at the edge of its container.";
     
-    Widget::Container {
+    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
         id: Some("root".to_string()),
         scrollable: false,
         bounds: WidgetBounds::default(),
@@ -136,7 +137,7 @@ fn create_ui() -> Widget {
             ),
             
             // Example 4: Height clipping
-            Widget::Container {
+            Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                 id: None,
                 scrollable: false,
                 bounds: WidgetBounds::default(),
@@ -224,7 +225,7 @@ fn create_clip_example(
     font_size: f32,
     bg_color: (f32, f32, f32, f32)
 ) -> Widget {
-    Widget::Container {
+    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
         id: None,
         scrollable: false,
         bounds: WidgetBounds::default(),

@@ -40,6 +40,7 @@ fn main() -> anyhow::Result<()> {
                 ctx.device,
                 ctx.queue,
                 Some(&s.interaction),
+                None,
             );
         })
         .run()
@@ -60,7 +61,7 @@ impl AppState {
 }
 
 fn create_ui() -> Widget {
-    Widget::Container {
+    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
         id: Some("root".to_string()),
         scrollable: false,
         bounds: WidgetBounds::default(),
@@ -184,7 +185,7 @@ fn create_ui() -> Widget {
             },
             
             // Row container with vertical dividers
-            Widget::Container {
+            Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
                 id: Some("row".to_string()),
                 scrollable: false,
                 bounds: WidgetBounds::default(),
@@ -248,7 +249,7 @@ fn create_ui() -> Widget {
 }
 
 fn create_text_box(title: &str, description: &str) -> Widget {
-    Widget::Container {
+    Widget::Container { layout_cache: None, render_cache: std::cell::RefCell::new(None),
         id: None,
         scrollable: false,
         bounds: WidgetBounds::default(),
