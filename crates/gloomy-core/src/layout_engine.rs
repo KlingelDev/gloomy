@@ -155,6 +155,7 @@ pub fn compute_layout(
                   Align::Center => (content_height - child_h) / 2.0,
                   Align::End => content_height - child_h,
                 };
+                set_size(child, child_w, child_h);
                 set_pos(child, *padding + current_main, *padding + cross_pos);
                 current_main += child_w;
               }
@@ -164,6 +165,8 @@ pub fn compute_layout(
                   Align::Center => (content_width - child_w) / 2.0,
                   Align::End => content_width - child_w,
                 };
+                set_size(child, child_w, child_h);
+                set_pos(child, *padding + cross_pos, *padding + current_main);
                 set_pos(child, *padding + cross_pos, *padding + current_main);
                 current_main += child_h;
               }

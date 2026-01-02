@@ -51,6 +51,7 @@ pub struct RenderContext<'a> {
   pub current_scissor: Option<(u32, u32, u32, u32)>,
   pub surface_width: u32,
   pub surface_height: u32,
+  pub scale_factor: f32, // Added scale factor
   pub overlay_queue: Vec<(Widget, Vec2)>, // Widget + Absolute Position
   pub data_provider: Option<&'a dyn crate::data_source::DataProvider>,
   pub widget_tracker: Option<&'a mut crate::widget_state::WidgetStateTracker>,
@@ -68,6 +69,7 @@ impl<'a> RenderContext<'a> {
     interaction: Option<&'a InteractionState>,
     surface_width: u32,
     surface_height: u32,
+    scale_factor: f32, // Added arg
     data_provider: Option<&'a dyn crate::data_source::DataProvider>,
     widget_tracker: Option<&'a mut crate::widget_state::WidgetStateTracker>,
   ) -> Self {
@@ -84,6 +86,7 @@ impl<'a> RenderContext<'a> {
       current_scissor: None,
       surface_width,
       surface_height,
+      scale_factor, // Init field
       overlay_queue: Vec::new(),
       data_provider,
       widget_tracker,
@@ -520,10 +523,11 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
           
           child_offset = pos - scroll;
 
-          let x = pos.x.max(0.0) as u32;
-          let y = pos.y.max(0.0) as u32;
-          let w = bounds.width.max(0.0) as u32;
-          let h = bounds.height.max(0.0) as u32;
+          let s = ctx.scale_factor;
+          let x = (pos.x * s).max(0.0) as u32;
+          let y = (pos.y * s).max(0.0) as u32;
+          let w = (bounds.width * s).max(0.0) as u32;
+          let h = (bounds.height * s).max(0.0) as u32;
           
           ctx.push_scissor(Some((x, y, w, h)));
           pushed_scissor = true;
@@ -547,10 +551,16 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
 
     Widget::Label { text, x, y, size, color, text_align, width, height, font, .. } => {
       // Set scissor to clip text within label bounds
-      let scissor_x = (ctx.offset.x + x).max(0.0) as u32;
-      let scissor_y = (ctx.offset.y + y).max(0.0) as u32;
-      let scissor_w = (*width).max(0.0) as u32;
-      let scissor_h = (*height).max(0.0) as u32;
+      let s = ctx.scale_factor;
+      let scissor_x = ((ctx.offset.x + x) * s).max(0.0) as u32;
+      let scissor_y = ((ctx.offset.y + y) * s).max(0.0) as u32;
+      let scissor_w = (*width * s).max(0.0) as u32;
+      let scissor_h = (*height * s).max(0.0) as u32;
+
+      // Debug
+      if text.starts_with("Large") {
+          log::info!("Label Render: '{}' Size={}x{} Scissor={:?}", text, width, height, (scissor_x, scissor_y, scissor_w, scissor_h));
+      }
       
       let old_scissor = if scissor_w > 0 && scissor_h > 0 {
         Some(ctx.text.set_scissor(Some((scissor_x, scissor_y, scissor_w, scissor_h))))
@@ -885,6 +895,11 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       let source = data_source_id.as_ref()
            .and_then(|id| ctx.data_provider.and_then(|dp| dp.get_source(id)));
       
+      // Debug Logging
+      if columns.len() > 0 {
+          log::info!("DataGrid Render: Bounds={:?}, Scale={}", bounds, ctx.scale_factor);
+      }
+
       // 2. Calculate column widths
       let available_width = bounds.width;
       let mut col_widths = Vec::with_capacity(columns.len());
@@ -934,19 +949,63 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
           let row_count = ds.row_count();
           let visible_height = bounds.height - header_height;
           
-          let start_row = (scroll_offset / row_height).floor().max(0.0) as usize;
-          let visible_rows_count = (visible_height / row_height).ceil() as usize + 1;
-          let end_row = (start_row + visible_rows_count).min(row_count);
+          let visible_rows_count = (visible_height / row_height).ceil() as usize;
+          
+          let buffer_size = 5;
+          let calculated_start = (scroll_offset / row_height).floor() as usize;
+          let start_row = calculated_start.saturating_sub(buffer_size);
+          
+          let end_row = (calculated_start + visible_rows_count + buffer_size).min(row_count);
           
           let content_y = pos.y + header_height;
+          
+          // --- SCISSOR START ---
+          let s = ctx.scale_factor;
+          let my_scissor_rect = (
+              (pos.x * s) as u32,
+              (content_y * s) as u32,
+              (bounds.width * s) as u32,
+              ((visible_height + 0.5) * s) as u32 // +0.5 to prevent sub-pixel cutoff
+          );
+          
+          // Helper to intersect scissors
+          let intersect_scissor = |old: Option<(u32,u32,u32,u32)>, new: (u32,u32,u32,u32)| -> (u32,u32,u32,u32) {
+               if let Some((ox, oy, ow, oh)) = old {
+                   let x = ox.max(new.0);
+                   let y = oy.max(new.1);
+                   let r = (ox + ow).min(new.0 + new.2);
+                   let b = (oy + oh).min(new.1 + new.3);
+                   let w = r.saturating_sub(x);
+                   let h = b.saturating_sub(y);
+                   (x, y, w, h)
+               } else {
+                   new
+               }
+          };
+          
+          let old_prim_scissor = ctx.primitives.set_scissor(None);
+          let new_prim_scissor = intersect_scissor(old_prim_scissor, my_scissor_rect);
+          ctx.primitives.set_scissor(Some(new_prim_scissor));
+          
+          let old_text_scissor = ctx.text.set_scissor(None);
+          let new_text_scissor = intersect_scissor(old_text_scissor, my_scissor_rect);
+          ctx.text.set_scissor(Some(new_text_scissor));
+          
+          // Images might be used in cells? (Future proofing)
+          // let old_img_scissor = ctx.images.set_scissor(None); 
+          // ...
           
           let mut r = start_row;
           while r < end_row {
                let row_y = pos.y + header_height + ((r as f32) * row_height) - scroll_offset;
                let center_y = row_y + row_height * 0.5;
                
-               // Clip check
-               if row_y + row_height < content_y || row_y > content_y + visible_height {
+               // Clip check can be loose now since strictly scissoring
+               // But keeps it for skipping totally off-screen primitives if buffer is large
+               if row_y > content_y + visible_height + (buffer_size as f32 * row_height) {
+                   break; 
+               }
+                if row_y + row_height < content_y - (buffer_size as f32 * row_height) {
                    r += 1;
                    continue;
                }
@@ -1023,6 +1082,10 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
                }
                r += 1;
            }
+           
+           // --- SCISSOR RESTORE ---
+           ctx.primitives.set_scissor(old_prim_scissor);
+           ctx.text.set_scissor(old_text_scissor);
        }
 
        // Scrollbar
@@ -1321,10 +1384,24 @@ pub fn render_ui_with_state(
   let size = renderer.size();
   let surface_width = size.x as u32;
   let surface_height = size.y as u32;
+  let scale_factor = renderer.scale_factor;
   
   let (primitives, text, images, textures) = renderer.split_mut();
   
-  let mut ctx = RenderContext::new(primitives, text, images, textures, device, queue, interaction, surface_width, surface_height, data_provider, widget_tracker);
+  let mut ctx = RenderContext::new(
+      primitives, 
+      text, 
+      images, 
+      textures, 
+      device, 
+      queue, 
+      interaction, 
+      surface_width, 
+      surface_height, 
+      scale_factor, // Use local variable
+      data_provider, 
+      widget_tracker
+  );
   render_widget(widget, &mut ctx);
 }
 

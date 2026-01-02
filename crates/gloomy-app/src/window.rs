@@ -44,7 +44,7 @@ impl GloomyWindow {
     surface.configure(device, &config);
 
     let renderer =
-      GloomyRenderer::new(device, format, config.width, config.height);
+      GloomyRenderer::new(device, format, config.width, config.height, window.scale_factor() as f32);
 
     Ok(Self { window, surface, config, renderer })
   }
@@ -63,7 +63,7 @@ impl GloomyWindow {
     self.config.width = width;
     self.config.height = height;
     self.surface.configure(device, &self.config);
-    self.renderer.resize(queue, width, height);
+    self.renderer.resize(queue, width, height, self.window.scale_factor() as f32);
   }
 
   /// Renders a frame.
@@ -84,7 +84,7 @@ impl GloomyWindow {
                    self.config.width, self.config.height, width, height);
         self.config.width = width;
         self.config.height = height;
-        self.renderer.resize(queue, width, height);
+        self.renderer.resize(queue, width, height, self.window.scale_factor() as f32);
     }
 
     self.renderer.prepare(device, queue);

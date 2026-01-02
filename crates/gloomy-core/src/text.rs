@@ -80,6 +80,7 @@ pub struct TextRenderer {
   pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>)>,
   current_scissor: Option<(u32, u32, u32, u32)>,
   screen_size: Vec2,
+  pub scale_factor: f32,
 }
 
 impl TextRenderer {
@@ -122,6 +123,7 @@ impl TextRenderer {
         pending: Vec::new(), 
         current_scissor: None, 
         screen_size: Vec2::new(width as f32, height as f32),
+        scale_factor: 1.0, // Default 1.0, updated via resize
         glyph_cache: HashMap::new(),
     }
   }
@@ -200,6 +202,7 @@ impl TextRenderer {
         pending: Vec::new(), 
         current_scissor: None, 
         screen_size: Vec2::new(width as f32, height as f32),
+        scale_factor: 1.0,
         glyph_cache: HashMap::new(),
     }
   }
@@ -288,6 +291,7 @@ impl TextRenderer {
       pending: Vec::new(),
       current_scissor: None,
       screen_size: Vec2::new(width as f32, height as f32),
+      scale_factor: 1.0,
       glyph_cache: HashMap::new(),
     }
   }
@@ -340,10 +344,12 @@ impl TextRenderer {
   }
 
   /// Handles viewport resize.
-  pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
+  pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32, scale_factor: f32) {
     self.width = width;
     self.height = height;
-    self.screen_size = Vec2::new(width as f32, height as f32);
+    self.scale_factor = scale_factor;
+    // Note: brush view must be PHYSICAL size
+    self.screen_size = Vec2::new(width as f32 / scale_factor, height as f32 / scale_factor);
     self.brush.resize_view(width as f32, height as f32, queue);
   }
   
@@ -387,56 +393,87 @@ impl TextRenderer {
   ) {
       if self.pending.is_empty() { return; }
       
-      let items: Vec<_> = self.pending.drain(..).collect();
+      // Sort by scissor rect to minimize state changes
+      self.pending.sort_by(|a, b| a.4.cmp(&b.4));
       
-      let sections: Vec<Section> = items.iter()
-          .map(|(text, pos, size, color, _scissor, align, font_name)| {
-              let font_id = font_name.as_deref()
-                  .and_then(|name| self.fonts.get(name))
-                  .copied()
-                  .unwrap_or(FontId(0));
+      let scale = self.scale_factor;
+      let width = self.width;
+      let height = self.height;
 
-              Section::default()
-                  .add_text(
-                      Text::new(text.as_str())
-                        .with_scale(*size)
-                        .with_color([color.x, color.y, color.z, color.w])
-                        .with_font_id(font_id),
-                  )
-                  .with_screen_position((pos.x, pos.y))
-                  .with_layout(
-                      wgpu_text::glyph_brush::Layout::default()
-                          .h_align(*align)
-                  )
-          }).collect();
-      
-      self.brush.queue(device, queue, sections).unwrap();
-      
-      {
-          let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-              label: Some("GloomyTextPass"),
-              color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                  view,
-                  resolve_target: None,
-                  ops: wgpu::Operations {
-                      load: wgpu::LoadOp::Load,
-                      store: wgpu::StoreOp::Store,
-                  },
-              })],
-              depth_stencil_attachment: None,
-              timestamp_writes: None,
-              occlusion_query_set: None,
-          });
+      let mut current_idx = 0;
+      while current_idx < self.pending.len() {
+           // Find batch range
+           let batch_scissor = self.pending[current_idx].4;
+           let mut end_idx = current_idx + 1;
+           while end_idx < self.pending.len() && self.pending[end_idx].4 == batch_scissor {
+               end_idx += 1;
+           }
+           
+           // Process batch
+           let batch_items = &self.pending[current_idx..end_idx];
+           let sections: Vec<Section> = batch_items.iter()
+             .map(|(text, pos, size, color, _scissor, align, font_name)| {
+                 let font_id = font_name.as_deref()
+                     .and_then(|name| self.fonts.get(name))
+                     .copied()
+                     .unwrap_or(FontId(0));
+                     
+                 // Apply Scale Factor to Position and Size
+                 let scaled_x = pos.x * scale;
+                 let scaled_y = pos.y * scale;
+                 let scaled_size = size * scale;
 
-          rpass.set_scissor_rect(
-              0, 0, 
-              self.screen_size.x as u32, 
-              self.screen_size.y as u32
-          );
-          
-          self.brush.draw(&mut rpass);
+                 Section::default()
+                     .add_text(
+                         Text::new(text.as_str())
+                           .with_scale(scaled_size)
+                           .with_color([color.x, color.y, color.z, color.w])
+                           .with_font_id(font_id),
+                     )
+                     .with_screen_position((scaled_x, scaled_y))
+                     .with_layout(
+                         wgpu_text::glyph_brush::Layout::default()
+                             .h_align(*align)
+                     )
+             }).collect();
+             
+           // Queue and Draw
+           self.brush.queue(device, queue, sections).unwrap();
+           
+           {
+               let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                   label: Some("GloomyTextPass"),
+                   color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                       view,
+                       resolve_target: None,
+                       ops: wgpu::Operations {
+                           load: wgpu::LoadOp::Load,
+                           store: wgpu::StoreOp::Store,
+                       },
+                   })],
+                   depth_stencil_attachment: None,
+                   timestamp_writes: None,
+                   occlusion_query_set: None,
+               });
+               
+               if let Some((x, y, w, h)) = batch_scissor {
+                   let sx = x.min(width);
+                   let sy = y.min(height);
+                   let sw = w.min(width - sx);
+                   let sh = h.min(height - sy);
+                   
+                   rpass.set_scissor_rect(sx, sy, sw, sh);
+               } else {
+                   rpass.set_scissor_rect(0, 0, width, height);
+               }
+               
+               self.brush.draw(&mut rpass);
+           }
+           
+           current_idx = end_idx;
       }
       
+      self.pending.clear();
       self.current_scissor = None;
   }
 

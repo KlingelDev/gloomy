@@ -34,6 +34,7 @@ pub struct GloomyRenderer {
   textures: HashMap<String, Texture>,
   width: u32,
   height: u32,
+  pub scale_factor: f32,
   clear_color: wgpu::Color,
 }
 
@@ -50,6 +51,7 @@ impl GloomyRenderer {
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
+    scale_factor: f32,
   ) -> Self {
     let primitives = PrimitiveRenderer::new(device, format, width, height);
     
@@ -80,6 +82,7 @@ impl GloomyRenderer {
       textures: HashMap::new(),
       width,
       height,
+      scale_factor,
       clear_color: wgpu::Color { r: 0.1, g: 0.1, b: 0.12, a: 1.0 },
     }
   }
@@ -90,6 +93,7 @@ impl GloomyRenderer {
     format: wgpu::TextureFormat,
     width: u32,
     height: u32,
+    scale_factor: f32,
     font_bytes: &[u8],
   ) -> Self {
     let primitives = PrimitiveRenderer::new(device, format, width, height);
@@ -103,6 +107,7 @@ impl GloomyRenderer {
       textures: HashMap::new(),
       width,
       height,
+      scale_factor,
       clear_color: wgpu::Color { r: 0.1, g: 0.1, b: 0.12, a: 1.0 },
     }
   }
@@ -113,17 +118,22 @@ impl GloomyRenderer {
   }
 
   /// Handles viewport resize.
-  pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
+  pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32, scale_factor: f32) {
+    log::info!("GloomyRenderer::resize: {}x{} @ {}", width, height, scale_factor);
     self.width = width;
     self.height = height;
-    self.primitives.resize(queue, width, height);
-    self.text.resize(queue, width, height);
+    self.scale_factor = scale_factor;
+    self.primitives.resize(queue, width, height, scale_factor);
+    self.text.resize(queue, width, height, scale_factor);
     self.images.resize(queue, width, height);
   }
 
-  /// Returns the current viewport size.
+  /// Returns the current viewport size (Logical).
   pub fn size(&self) -> Vec2 {
-    Vec2::new(self.width as f32, self.height as f32)
+    Vec2::new(
+        self.width as f32 / self.scale_factor, 
+        self.height as f32 / self.scale_factor
+    )
   }
 
   /// Access the primitive renderer for drawing shapes.

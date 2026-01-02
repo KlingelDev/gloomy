@@ -214,7 +214,13 @@ impl GloomyApp {
       WindowEvent::CursorMoved { position, .. } => {
         if let Some(win) = state.windows.get_mut(&window_id) {
             if let Some(cb) = self.cursor_move_fn.as_mut() {
-                cb(win, position.x as f32, position.y as f32);
+                let scale = win.window.scale_factor();
+                let logical_x = position.x / scale;
+                let logical_y = position.y / scale;
+                if false { // Reduced noise, enable if needed
+                    log::info!("Input: Phys({:?}) -> Log({:?})", position, (logical_x, logical_y));
+                }
+                cb(win, logical_x as f32, logical_y as f32);
             }
         }
       }

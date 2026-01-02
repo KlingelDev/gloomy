@@ -81,7 +81,7 @@
 **Goal:** Seamless integration with mpl-wgpu for charts and graphs
 
 ### 2.1 Chart Container Widget ⭐
-**Priority:** CRITICAL  
+**Priority:** CRITICAL (BLOCKED - Waiting for backend)
 **Estimated:** 2 weeks
 
 **Features:**

@@ -46,7 +46,9 @@ pub struct PrimitiveRenderer {
   instances: Vec<Instance>,
   batches: Vec<Batch>,
   current_scissor: Option<(u32, u32, u32, u32)>,
-  screen_size: Vec2,
+  screen_size: Vec2, // Logical
+  width: u32, // Physical
+  height: u32, // Physical
   capacity: usize,
 }
 
@@ -160,13 +162,17 @@ impl PrimitiveRenderer {
       batches: Vec::new(),
       current_scissor: None,
       screen_size: Vec2::new(width as f32, height as f32),
+      width,
+      height,
       capacity: initial_capacity,
     }
   }
 
   /// Handles viewport resize.
-  pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
-    self.screen_size = Vec2::new(width as f32, height as f32);
+  pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32, scale_factor: f32) {
+    self.width = width;
+    self.height = height;
+    self.screen_size = Vec2::new(width as f32 / scale_factor, height as f32 / scale_factor);
     queue.write_buffer(
       &self.uniform_buffer,
       0,
@@ -353,9 +359,9 @@ impl PrimitiveRenderer {
 
     for batch in &self.batches {
          if let Some((x, y, w, h)) = batch.scissor {
-             // Clamp to screen size
-             let fw = self.screen_size.x as u32;
-             let fh = self.screen_size.y as u32;
+             // Clamp to screen size (Physical)
+             let fw = self.width;
+             let fh = self.height;
              let sx = x.min(fw);
              let sy = y.min(fh);
              let sw = w.min(fw - sx);
@@ -369,7 +375,7 @@ impl PrimitiveRenderer {
              }
          } else {
              // Full screen
-             render_pass.set_scissor_rect(0, 0, self.screen_size.x as u32, self.screen_size.y as u32);
+             render_pass.set_scissor_rect(0, 0, self.width, self.height);
          }
          render_pass.draw(0..6, batch.range.clone());
     }
