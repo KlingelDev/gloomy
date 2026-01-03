@@ -64,3 +64,15 @@ path = "examples/style_ui.rs"
 [[example]]
 name = "datepicker_demo"
 path = "examples/datepicker_demo.rs"
+
+[[example]]
+name = "datagrid_edit_demo"
+path = "examples/datagrid_edit_demo.rs"
+
+[[example]]
+name = "dashboard_demo"
+path = "examples/dashboard_demo.rs"
+
+[[example]]
+name = "ron_loader_demo"
+path = "examples/ron_loader_demo.rs"

@@ -31,6 +31,7 @@ pub mod tree;
 pub mod validation;
 pub mod rich_text;
 pub mod widget_state;
+pub mod kpi;
 
 pub use container::Container;
 pub use glam::{Vec2, Vec4};
@@ -46,7 +47,8 @@ pub use ui::{
 };
 pub use widget::{Widget, WidgetBounds};
 pub use theme::{Theme, ColorPalette};
-pub use style::GlobalStyle;
+pub use style::{GlobalStyle, BoxStyle, ButtonStyle, TextInputStyle, Shadow, Gradient, Border, BorderStyle};
 pub use style_context::StyleContext;
 pub use data_source::{DataSource, CellValue, VecDataSource};
 pub use datagrid::{ColumnDef, ColumnWidth, DataGrid, DataGridStyle, SelectionMode, SortDirection};
+pub use kpi::{KpiCard, KpiCardStyle, KpiTrend, TrendDirection};

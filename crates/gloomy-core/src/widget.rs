@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
 use crate::validation::ValidationRule;
 use chrono::NaiveDate;
+use crate::style::{BoxStyle, ButtonStyle, TextInputStyle, ListViewStyle, Shadow, Gradient, Border, BorderStyle};
 
 /// RGBA color as tuple for serde.
 pub type Color = (f32, f32, f32, f32);
@@ -105,17 +106,7 @@ pub enum Widget {
     #[serde(default)]
     height: Option<f32>,
     #[serde(default)]
-    background: Option<Color>,
-    #[serde(default)]
-    border: Option<Border>,
-    #[serde(default)]
-    corner_radius: f32,
-    #[serde(default)]
-    shadow: Option<Shadow>,
-    #[serde(default)]
-    gradient: Option<Gradient>,
-    #[serde(default)]
-    corner_radii: Option<[f32; 4]>,
+    style: BoxStyle,
 
     #[serde(default)]
     padding: f32,
@@ -149,9 +140,9 @@ pub enum Widget {
     x: f32,
     #[serde(default)]
     y: f32,
-    #[serde(skip)]
+    #[serde(default)]
     width: f32,
-    #[serde(skip)]
+    #[serde(default)]
     height: f32,
     #[serde(default = "default_font_size")]
     size: f32,
@@ -179,22 +170,14 @@ pub enum Widget {
     action: String,
     #[serde(default)]
     bounds: WidgetBounds,
-    #[serde(default = "default_button_bg")]
-    background: Color,
-    #[serde(default = "default_button_hover")]
-    hover_color: Color,
-    #[serde(default = "default_button_active")]
-    active_color: Color,
     #[serde(default)]
-    border: Option<Border>,
-    #[serde(default = "default_corner_radius")]
-    corner_radius: f32,
+    style: ButtonStyle,
     #[serde(default)]
-    shadow: Option<Shadow>,
+    width: Option<f32>,
     #[serde(default)]
-    gradient: Option<Gradient>,
+    height: Option<f32>,
     #[serde(default)]
-    corner_radii: Option<[f32; 4]>,
+    disabled: bool,
     #[serde(default)]
     layout: Layout,
     #[serde(default)]
@@ -209,6 +192,36 @@ pub enum Widget {
     row_span: usize,
     #[serde(default)]
     font: Option<String>,
+  },
+
+  /// List/Menu widget.
+  ListView {
+      #[serde(default)]
+      id: String,
+      items: Vec<String>,
+      #[serde(default)]
+      selected_index: Option<usize>,
+      #[serde(default)]
+      style: ListViewStyle,
+
+      #[serde(default)]
+      bounds: WidgetBounds,
+      #[serde(default)]
+      width: Option<f32>,
+      #[serde(default)]
+      height: Option<f32>,
+      #[serde(default)]
+      layout: Layout,
+      #[serde(default)]
+      flex: f32,
+      #[serde(default)]
+      grid_col: Option<usize>,
+      #[serde(default)]
+      grid_row: Option<usize>,
+      #[serde(default = "default_span_one")]
+      col_span: usize,
+      #[serde(default = "default_span_one")]
+      row_span: usize,
   },
 
   /// Tree Widget
@@ -442,6 +455,32 @@ pub enum Widget {
     sort_direction: Option<crate::data_source::SortDirection>,
     #[serde(default)]
     style: crate::datagrid::DataGridStyle,
+    #[serde(default)]
+    flex: f32,
+    #[serde(default)]
+    grid_col: Option<usize>,
+    #[serde(default)]
+    grid_row: Option<usize>,
+    #[serde(default = "default_span_one")]
+    col_span: usize,
+    #[serde(default = "default_span_one")]
+    row_span: usize,
+  },
+
+  /// KPI Card for analytics.
+  KpiCard {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    value: String,
+    #[serde(default)]
+    trend: Option<crate::kpi::KpiTrend>,
+    #[serde(default)]
+    style: crate::kpi::KpiCardStyle,
+    #[serde(default)]
+    bounds: WidgetBounds,
     #[serde(default)]
     flex: f32,
     #[serde(default)]
@@ -697,26 +736,6 @@ fn default_spacer_size() -> f32 {
   10.0
 }
 
-fn default_button_bg() -> Color {
-  (0.3, 0.3, 0.3, 1.0) // Flat dark gray
-}
-
-fn default_button_hover() -> Color {
-  (0.4, 0.4, 0.4, 1.0) // Lighter gray
-}
-
-fn default_button_active() -> Color {
-  (0.2, 0.2, 0.2, 1.0) // Darker gray
-}
-
-fn default_corner_radius() -> f32 {
-  4.0
-}
-
-fn default_span_one() -> usize {
-  1
-}
-
 fn default_divider_thickness() -> f32 {
   1.0
 }
@@ -749,16 +768,12 @@ fn default_slider_max() -> f32 {
   1.0
 }
 
-fn default_slider_height() -> f32 {
-  4.0
-}
-
-fn default_thumb_radius() -> f32 {
-  8.0
-}
-
 fn default_active_color() -> Color {
   (0.6, 0.6, 0.6, 1.0) // Flat light gray
+}
+
+fn default_span_one() -> usize {
+  1
 }
 
 fn default_inactive_color() -> Color {
@@ -774,12 +789,7 @@ impl Widget {
       bounds: WidgetBounds::default(),
       width: None,
       height: None,
-      background: None,
-      border: None,
-      corner_radius: 0.0,
-      corner_radii: None,
-      shadow: None,
-      gradient: None,
+      style: BoxStyle::default(),
       padding: 0.0,
       layout: Layout::default(),
       flex: 0.0,
@@ -850,6 +860,8 @@ impl Widget {
           Widget::Scrollbar { bounds, .. } => *bounds,
           Widget::DataGrid { bounds, .. } => *bounds,
           Widget::Tree { bounds, .. } => *bounds,
+          Widget::KpiCard { bounds, .. } => *bounds,
+          Widget::ListView { bounds, .. } => *bounds,
       }
   }
 
@@ -866,6 +878,7 @@ impl Widget {
           Widget::ToggleSwitch { id, .. } => Some(id),
           Widget::RadioButton { group_id, value, .. } => Some(value), // Use value as ID for specific radio? Or group? Probably individual click target needs diff ID.
           Widget::Dropdown { id, .. } => Some(id),
+          Widget::ListView { id, .. } => Some(id), 
           _ => None,
       }
   }
@@ -920,61 +933,7 @@ impl Widget {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub struct Shadow {
-    pub offset: (f32, f32),
-    pub blur: f32,
-    pub color: Color,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub struct Gradient {
-    pub start: Color,
-    pub end: Color,
-}
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq)]
-pub enum BorderStyle {
-    #[default]
-    Solid,
-    Dashed,
-    Dotted,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default)]
-pub struct Border {
-    pub width: f32,
-    pub color: Color,
-    #[serde(default)]
-    pub gradient: Option<Gradient>,
-    #[serde(default)]
-    pub style: BorderStyle,
-    #[serde(default)]
-    pub dash_len: f32,
-    #[serde(default)]
-    pub gap_len: f32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct TextInputStyle {
-    #[serde(default)]
-    pub background: Option<Color>,
-    #[serde(default)]
-    pub background_focused: Option<Color>,
-    #[serde(default)]
-    pub border: Option<Border>,
-    #[serde(default)]
-    pub border_focused: Option<Border>,
-    #[serde(default = "default_text_color")]
-    pub text_color: Color,
-    #[serde(default = "default_placeholder_color")]
-    pub placeholder_color: Color,
-    #[serde(default = "default_cursor_color")]
-    pub cursor_color: Color,
-    #[serde(default)]
-    pub corner_radius: f32,
-    #[serde(default)]
-    pub font: Option<String>,
-}
+// Structs moved to style.rs
 
 /// Style for NumberInput widget.
 #[derive(Serialize, Deserialize, Debug, Clone)]

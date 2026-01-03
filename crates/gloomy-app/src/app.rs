@@ -40,6 +40,9 @@ pub struct GloomyApp {
   keyboard_input_fn: Option<KeyboardInputFn>,
   scroll_fn: Option<ScrollFn>,
   modifiers_changed_fn: Option<ModifiersChangedFn>,
+  width: u32,
+  height: u32,
+  title: String,
 }
 
 /// Runtime state during event loop.
@@ -61,7 +64,23 @@ impl GloomyApp {
       keyboard_input_fn: None,
       scroll_fn: None,
       modifiers_changed_fn: None,
+      width: 800,
+      height: 600,
+      title: "Gloomy".to_string(),
     }
+  }
+
+  /// Sets the initial window title.
+  pub fn with_title(mut self, title: impl Into<String>) -> Self {
+      self.title = title.into();
+      self
+  }
+
+  /// Sets the initial window size.
+  pub fn with_size(mut self, width: u32, height: u32) -> Self {
+      self.width = width;
+      self.height = height;
+      self
   }
 
   // ... (existing methods)
@@ -130,8 +149,8 @@ impl GloomyApp {
     // Create initial window
     let window = Arc::new(
       WindowBuilder::new()
-        .with_title("Gloomy")
-        .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
+        .with_title(&self.title)
+        .with_inner_size(winit::dpi::LogicalSize::new(self.width, self.height))
         .build(&event_loop)?,
     );
 

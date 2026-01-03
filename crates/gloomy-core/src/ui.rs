@@ -8,6 +8,7 @@ use crate::widget::{Widget, TextAlign, WidgetBounds};
 use crate::layout::Layout;
 use wgpu_text::glyph_brush::HorizontalAlign;
 use glam::{Vec2, Vec4};
+use crate::style::{BoxStyle, ButtonStyle, TextInputStyle, Border};
 use std::fs;
 use std::path::Path;
 use winit::keyboard::{Key, NamedKey};
@@ -100,6 +101,7 @@ impl<'a> RenderContext<'a> {
     pub fn push_scissor(&mut self, rect: Option<(u32, u32, u32, u32)>) {
           self.scissor_stack.push(self.current_scissor);
           
+          
           if let Some(r) = rect {
               if let Some(current) = self.current_scissor {
                   let x = r.0.max(current.0);
@@ -111,8 +113,6 @@ impl<'a> RenderContext<'a> {
                   } else {
                       self.current_scissor = Some((0, 0, 0, 0));
                   }
-              } else {
-                  self.current_scissor = Some(r);
               }
           }
           
@@ -410,9 +410,15 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
                 let item_h = 30.0;
                 let btn = Widget::Button {
                     text: opt.clone(), action, bounds: WidgetBounds { x: 0.0, y: 0.0, width: w, height: item_h },
-                    background: bg_col, hover_color: (0.35, 0.35, 0.4, 1.0), active_color: (0.4, 0.4, 0.5, 1.0),
-                    border: None, corner_radius: 0.0, shadow: None, gradient: None, layout: Layout::default(),
-                    flex: 0.0, grid_col: None, grid_row: None, col_span: 1, row_span: 1, corner_radii: None,
+                    style: ButtonStyle {
+                        idle: BoxStyle::fill(bg_col),
+                        hover: BoxStyle::fill((0.35, 0.35, 0.4, 1.0)),
+                        active: BoxStyle::fill((0.4, 0.4, 0.5, 1.0)),
+                        text_color: (1.0, 1.0, 1.0, 1.0),
+                        ..Default::default()
+                    },
+                    width: None, height: None, disabled: false, layout: Layout::default(),
+                    flex: 0.0, grid_col: None, grid_row: None, col_span: 1, row_span: 1,
                     font: None,
                 };
                 list_children.push(btn);
@@ -421,11 +427,15 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
             let dropdown_list = Widget::Container {
                 id: Some(format!("{}_list", id)), scrollable: false,
                 bounds: WidgetBounds { x: 0.0, y: 0.0, width: w, height: list_height },
-                width: Some(w), height: Some(list_height), background: Some((0.2, 0.2, 0.25, 1.0)),
-                border: Some(crate::widget::Border { width: 1.0, color: (0.1, 0.1, 0.1, 1.0), ..Default::default() }),
-                corner_radius: 0.0, shadow: Some(crate::widget::Shadow { offset: (0.0, 4.0), blur: 8.0, color: (0.0, 0.0, 0.0, 0.5) }),
-                gradient: None, padding: 0.0, layout: crate::layout::Layout { direction: crate::layout::Direction::Column, ..Default::default() },
-                flex: 0.0, grid_col: None, grid_row: None, col_span: 1, row_span: 1, corner_radii: None,
+                width: Some(w), height: Some(list_height),
+                style: BoxStyle {
+                    background: Some((0.2, 0.2, 0.25, 1.0)),
+                    border: Some(crate::style::Border { width: 1.0, color: (0.1, 0.1, 0.1, 1.0), ..Default::default() }),
+                    shadow: Some(crate::style::Shadow { offset: (0.0, 4.0), blur: 8.0, color: (0.0, 0.0, 0.0, 0.5) }),
+                    ..Default::default()
+                },
+                padding: 0.0, layout: crate::layout::Layout { direction: crate::layout::Direction::Column, ..Default::default() },
+                flex: 0.0, grid_col: None, grid_row: None, col_span: 1, row_span: 1,
                 children: list_children,
                 layout_cache: None,
                 render_cache: std::cell::RefCell::new(None),
@@ -434,7 +444,7 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
             ctx.overlay_queue.push((dropdown_list, overlay_pos));
         }
     }
-    Widget::Container { id, children, bounds, padding: _, background, corner_radius, scrollable, shadow, gradient, border, layout_cache, render_cache, .. } => {
+    Widget::Container { id, children, bounds, padding: _, style, scrollable, layout_cache, render_cache, .. } => {
       // --- RENDER CACHE DISABLED ---
       // The render cache is causing issues with initial sizing and scroll updates.
       // TODO: Implement proper cache invalidation based on scroll state and layout changes.
@@ -443,70 +453,9 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       let capture_state = ctx.begin_capture();
 
       let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-
-      // 1. Draw Shadow
-      if let Some(shadow) = shadow {
-          let shadow_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          let shadow_pos = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5) + Vec2::new(shadow.offset.0, shadow.offset.1);
-          
-          ctx.primitives.draw_styled_rect(
-              shadow_pos,
-              shadow_size,
-              Vec4::new(shadow.color.0, shadow.color.1, shadow.color.2, shadow.color.3),
-              Vec4::new(shadow.color.0, shadow.color.1, shadow.color.2, shadow.color.3),
-              [*corner_radius; 4],
-              0.0,
-              shadow.blur,
-          );
-      }
-
-      // 2. Draw Background
-      if let Some(bc) = background {
-          let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          
-          let (col_start, col_end) = if let Some(grad) = gradient {
-              (Vec4::new(grad.start.0, grad.start.1, grad.start.2, grad.start.3),
-               Vec4::new(grad.end.0, grad.end.1, grad.end.2, grad.end.3))
-          } else {
-              let c = Vec4::new(bc.0, bc.1, bc.2, bc.3);
-              (c, c)
-          };
-
-          ctx.primitives.draw_styled_rect(
-            center,
-            half_size,
-            col_start,
-            col_end,
-            [*corner_radius; 4],
-            0.0,
-            0.0
-          );
-      }
+      let size = Vec2::new(bounds.width, bounds.height);
       
-      // 3. Draw Border
-      if let Some(border) = border {
-          let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          
-          let (col_start, col_end) = if let Some(grad) = border.gradient {
-              (Vec4::new(grad.start.0, grad.start.1, grad.start.2, grad.start.3),
-               Vec4::new(grad.end.0, grad.end.1, grad.end.2, grad.end.3))
-          } else {
-              let c = Vec4::new(border.color.0, border.color.1, border.color.2, border.color.3);
-              (c, c)
-          };
-
-          ctx.primitives.draw_styled_rect(
-            center,
-            half_size,
-            col_start,
-            col_end,
-            [*corner_radius; 4],
-            border.width,
-            0.0
-          );
-      }
+      draw_box(ctx, pos, size, style);
 
       let mut child_offset = pos;
       let mut pushed_scissor = false;
@@ -521,10 +470,10 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
           child_offset = pos - scroll;
 
           let s = ctx.scale_factor;
-          let x = (pos.x * s).max(0.0) as u32;
-          let y = (pos.y * s).max(0.0) as u32;
-          let w = (bounds.width * s).max(0.0) as u32;
-          let h = (bounds.height * s).max(0.0) as u32;
+          let x = (pos.x * s).max(0.0).floor() as u32;
+          let y = (pos.y * s).max(0.0).floor() as u32;
+          let w = (bounds.width * s).max(0.0).ceil() as u32;
+          let h = (bounds.height * s).max(0.0).ceil() as u32;
           
           ctx.push_scissor(Some((x, y, w, h)));
           pushed_scissor = true;
@@ -549,10 +498,10 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
     Widget::Label { text, x, y, size, color, text_align, width, height, font, .. } => {
       // Set scissor to clip text within label bounds
       let s = ctx.scale_factor;
-      let scissor_x = ((ctx.offset.x + x) * s).max(0.0) as u32;
-      let scissor_y = ((ctx.offset.y + y) * s).max(0.0) as u32;
-      let scissor_w = (*width * s).max(0.0) as u32;
-      let scissor_h = (*height * s).max(0.0) as u32;
+      let scissor_x = ((ctx.offset.x + x) * s).max(0.0).floor() as u32;
+      let scissor_y = ((ctx.offset.y + y) * s).max(0.0).floor() as u32;
+      let scissor_w = (*width * s).max(0.0).ceil() as u32;
+      let scissor_h = (*height * s).max(0.0).ceil() as u32;
 
       let old_scissor = if scissor_w > 0 && scissor_h > 0 {
         Some(ctx.text.set_scissor(Some((scissor_x, scissor_y, scissor_w, scissor_h))))
@@ -585,114 +534,94 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       }
     }
 
+    Widget::ListView {
+        items,
+        selected_index,
+        style,
+        bounds,
+        id,
+        ..
+    } => {
+         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+         let mouse_pos = ctx.interaction.map(|s| s.mouse_pos).unwrap_or(Vec2::ZERO);
+         let local_mouse_y = mouse_pos.y - pos.y;
+         let hover_index = if mouse_pos.x >= pos.x && mouse_pos.x <= pos.x + bounds.width 
+             && mouse_pos.y >= pos.y && mouse_pos.y <= pos.y + bounds.height 
+         {
+             Some((local_mouse_y / style.item_height) as usize)
+         } else {
+             None
+         };
+         
+         for (i, item) in items.iter().enumerate() {
+             let item_y = pos.y + i as f32 * style.item_height;
+             let item_rect_pos = Vec2::new(pos.x + bounds.width * 0.5, item_y + style.item_height * 0.5);
+             let item_size = Vec2::new(bounds.width, style.item_height);
+             
+             let is_selected = selected_index.map(|si| si == i).unwrap_or(false);
+             let is_hovered = hover_index.map(|hi| hi == i).unwrap_or(false);
+             
+             let (bg_style, text_color) = if is_selected {
+                 (&style.selected, style.text_color_selected)
+             } else if is_hovered {
+                 (&style.hover, style.text_color_idle)
+             } else {
+                 (&style.idle, style.text_color_idle)
+             };
+             
+             // Draw Background
+             if let Some(bg_color) = bg_style.background {
+                  ctx.primitives.draw_rect(
+                      item_rect_pos,
+                      item_size * 0.5, // draw_rect expects half-extents
+                      Vec4::from(bg_color),
+                      bg_style.corner_radii,
+                      bg_style.border.map(|b| b.width).unwrap_or(0.0)
+                  );
+             }
+             
+             // Draw Text
+             let text_pos = Vec2::new(pos.x + 12.0, item_y + style.item_height * 0.5 - 8.0); // Simple centering
+             ctx.text.draw(
+                 ctx.device, ctx.queue, item, text_pos, 16.0, 
+                 Vec4::from(text_color), HorizontalAlign::Left, None
+             );
+         }
+    }
+
     Widget::Button {
       text,
       action,
       bounds,
-      background,
-      hover_color,
-      active_color,
-      border,
-      corner_radius,
-      shadow,
-      gradient,
+      style,
+      disabled,
       font,
       ..
     } => {
-      let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-      
-      let mut color_to_use = *background;
-      let mut active_border = None;
+      let is_disabled = *disabled;
+      let is_hovered = ctx.interaction.map(|i| i.is_hovered(action)).unwrap_or(false);
+      let is_active = ctx.interaction.map(|i| i.is_active(action)).unwrap_or(false);
 
-      if let Some(state) = ctx.interaction {
-        if state.is_active(action) {
-          color_to_use = *active_color;
-          active_border = Some((0.5, 0.5, 0.5, 1.0)); // Light gray border active
-        } else if state.is_hovered(action) {
-          color_to_use = *hover_color;
-          active_border = Some((0.6, 0.6, 0.6, 0.5)); // Subtle gray glow
-        }
-      }
-
-      // Button Shadow
-      if let Some(shadow) = shadow {
-          let shadow_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          let map_center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-          let shadow_pos = map_center + Vec2::new(shadow.offset.0, shadow.offset.1);
-          
-          ctx.primitives.draw_styled_rect(
-              shadow_pos,
-              shadow_size,
-              Vec4::new(shadow.color.0, shadow.color.1, shadow.color.2, shadow.color.3),
-              Vec4::new(shadow.color.0, shadow.color.1, shadow.color.2, shadow.color.3),
-              [*corner_radius; 4],
-              0.0,
-              shadow.blur,
-          );
-      }
-
-      let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-      let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-      
-      // Button Gradient or Solid
-      let (mut c_start, mut c_end) = if let Some(grad) = gradient {
-           (Vec4::new(grad.start.0, grad.start.1, grad.start.2, grad.start.3),
-            Vec4::new(grad.end.0, grad.end.1, grad.end.2, grad.end.3))
+      let box_style = if is_disabled {
+          &style.disabled
+      } else if is_active {
+          &style.active
+      } else if is_hovered {
+          &style.hover
       } else {
-           let c = Vec4::new(color_to_use.0, color_to_use.1, color_to_use.2, color_to_use.3);
-           (c, c)
+          &style.idle
       };
+    
+      let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+      let size = Vec2::new(bounds.width, bounds.height);
       
-      // Hover overlay (if gradient)
-      if let Some(state) = ctx.interaction {
-           if state.is_hovered(action) && gradient.is_some() && !state.is_active(action) {
-               // Lighten slightly
-               c_start += Vec4::splat(0.1);
-               c_end += Vec4::splat(0.1);
-           }
-      }
-
-      ctx.primitives.draw_styled_rect(
-        center,
-        half_size,
-        c_start,
-        c_end,
-        [*corner_radius; 4],
-        0.0,
-        0.0
-      );
-
-      // Draw border (configured or active/hover effect)
-      if let Some(bc) = active_border {
-           ctx.primitives.draw_rect(center, half_size, Vec4::new(bc.0, bc.1, bc.2, bc.3), [*corner_radius; 4], 2.0);
-      } else if let Some(border) = border {
-          // Gradient border support for button
-          let (col_start, col_end) = if let Some(grad) = border.gradient {
-              (Vec4::new(grad.start.0, grad.start.1, grad.start.2, grad.start.3),
-               Vec4::new(grad.end.0, grad.end.1, grad.end.2, grad.end.3))
-          } else {
-              let c = Vec4::new(border.color.0, border.color.1, border.color.2, border.color.3);
-              (c, c)
-          };
-          
-          ctx.primitives.draw_styled_rect(
-            center,
-            half_size,
-            col_start,
-            col_end,
-            [*corner_radius; 4],
-            border.width,
-            0.0
-          );
-      }
-
+      draw_box(ctx, pos, size, box_style);
+      
       let text_size = 16.0;
-      // Calculate center position for the button
       let text_pos = pos + Vec2::new(bounds.width * 0.5, (bounds.height - text_size) * 0.5);
-      let text_col = (1.0, 1.0, 1.0, 1.0);
+      // Determine text color based on state if supported, or just base color
+      let text_col = style.text_color;
 
-      // Use rich text rendering with center alignment
-      // The render_text_field will handle centering the text around text_pos
       render_text_field(
         ctx,
         text,
@@ -716,69 +645,61 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       ..
     } => {
         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-        let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-        let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+        let size = Vec2::new(bounds.width, bounds.height); 
 
         let is_focused = ctx.interaction.map(|s| s.focused_id.as_deref() == Some(id)).unwrap_or(false);
         
-        // Background
-        let bg_color = if is_focused {
-             style.background_focused.unwrap_or(style.background.unwrap_or((0.15, 0.15, 0.18, 1.0)))
+        let box_style = if is_focused {
+            &style.focused
         } else {
-             style.background.unwrap_or((0.1, 0.1, 0.12, 1.0))
+            &style.idle
         };
-        ctx.primitives.draw_rect(center, half_size, Vec4::new(bg_color.0, bg_color.1, bg_color.2, bg_color.3), [4.0; 4], 0.0);
         
-        // Border
+        draw_box(ctx, pos, size, box_style);
+        
+        // Draw error border if needed (overlay)
         let has_error = ctx.interaction.as_ref()
            .and_then(|i| i.validation_errors.get(id))
            .map(|e| !e.is_empty())
            .unwrap_or(false);
            
-        let error_border_color = (1.0, 0.2, 0.2, 1.0);
-
-        let border = if is_focused {
-            style.border_focused.as_ref().or(style.border.as_ref())
-        } else {
-            style.border.as_ref()
-        };
-        
-        if let Some(b) = border {
-             let color = if has_error { error_border_color } else { b.color };
-             ctx.primitives.draw_rect(center, half_size, Vec4::new(color.0, color.1, color.2, color.3), [4.0; 4], b.width);
-        } else if is_focused && style.border_focused.is_none() {
-             // Default focus border if none specified
-             let color = if has_error { error_border_color } else { (0.75, 0.75, 0.75, 1.0) };
-             ctx.primitives.draw_rect(center, half_size, Vec4::new(color.0, color.1, color.2, color.3), [4.0; 4], 1.5);
-        } else if has_error {
-             // Default error border if no border specified
-             ctx.primitives.draw_rect(center, half_size, Vec4::new(error_border_color.0, error_border_color.1, error_border_color.2, error_border_color.3), [4.0; 4], 1.5);
+        if has_error {
+             let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+             let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(1.0, 0.2, 0.2, 1.0), style.idle.corner_radii, 1.5);
         }
 
         let text = if value.is_empty() { placeholder } else { value };
-        let col = if value.is_empty() { Vec4::new(0.5, 0.5, 0.6, 1.0) } else { Vec4::new(0.9, 0.9, 0.95, 1.0) };
-        let size = if *font_size > 0.0 { *font_size } else { 14.0 };
+        let col_tuple = if value.is_empty() { style.placeholder_color } else { style.text_color };
+        let col = Vec4::new(col_tuple.0, col_tuple.1, col_tuple.2, col_tuple.3);
         
-        let text_dims = ctx.text.measure(text, size, style.font.as_deref());
+        let size_val = if *font_size > 0.0 { *font_size } else { 14.0 };
+        
+        // Measure and position text
+        // (Assuming Left align for now as per original code logic usually hardcoded x=8.0)
+        // Original code: text_pos = pos + Vec2::new(8.0, ...)
+        
+        let text_dims = ctx.text.measure(text, size_val, style.font.as_deref());
         let text_pos = pos + Vec2::new(8.0, (bounds.height - text_dims.y) * 0.5);
 
-        ctx.text.draw(ctx.device, ctx.queue, text, text_pos, size, col, HorizontalAlign::Left, style.font.as_deref());
+        ctx.text.draw(ctx.device, ctx.queue, text, text_pos, size_val, col, HorizontalAlign::Left, style.font.as_deref());
         
-        // Draw cursor if focused - White
+        // Draw cursor if focused
         if is_focused {
             let align_x = 8.0;
             let cursor_x = if value.is_empty() {
                 align_x
             } else {
-                let val_dims = ctx.text.measure(value, size, style.font.as_deref());
+                let val_dims = ctx.text.measure(value, size_val, style.font.as_deref());
                 align_x + val_dims.x + 2.0
             };
             
             let cursor_pos = pos + Vec2::new(cursor_x + 1.0, bounds.height * 0.5);
+            let cursor_col = Vec4::new(style.cursor_color.0, style.cursor_color.1, style.cursor_color.2, style.cursor_color.3);
             ctx.primitives.draw_rect(
                 cursor_pos, 
-                Vec2::new(1.0, size * 0.8 * 0.5), 
-                Vec4::new(0.8, 0.8, 0.8, 1.0), 
+                Vec2::new(1.0, size_val * 0.8 * 0.5), 
+                cursor_col, 
                 [0.0; 4], 
                 0.0
             );
@@ -1376,25 +1297,94 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
                        break; // All subsequent columns are also to the right
                    }
                    
-                   let text = ds.cell_text(r, c);
+                   // Check if this cell is being edited
+                   let is_editing = id.as_ref().map(|grid_id| {
+                       ctx.interaction.as_ref()
+                           .map(|s| s.is_editing_cell(grid_id, r, c))
+                           .unwrap_or(false)
+                   }).unwrap_or(false);
                    
-                   let (text_align_enum, text_x) = match col.align {
-                       crate::widget::TextAlign::Left => (crate::widget::TextAlign::Left, x + style.cell_padding),
-                       crate::widget::TextAlign::Center => (crate::widget::TextAlign::Center, x + w * 0.5),
-                       crate::widget::TextAlign::Right => (crate::widget::TextAlign::Right, x + w - style.cell_padding),
-                   };
+                   if is_editing {
+                       // Draw edit input background
+                       let cell_center = Vec2::new(x + w * 0.5, center_y);
+                       let cell_half = Vec2::new(w * 0.5 - 1.0, row_height * 0.5 - 1.0);
+                       ctx.primitives.draw_rect(
+                           cell_center,
+                           cell_half,
+                           Vec4::new(0.2, 0.25, 0.35, 1.0),
+                           [2.0; 4],
+                           0.0
+                       );
+                       
+                       // Draw edit buffer text
+                       let edit_text = ctx.interaction.as_ref()
+                           .map(|s| s.grid_edit_buffer.as_str())
+                           .unwrap_or("");
+                       ctx.text.draw(
+                           ctx.device,
+                           ctx.queue,
+                           edit_text,
+                           Vec2::new(x + style.cell_padding, center_y - 6.5),
+                           13.0,
+                           Vec4::new(1.0, 1.0, 1.0, 1.0),
+                           HorizontalAlign::Left,
+                           None
+                       );
+                       
+                       // Draw cursor
+                       let cursor_x = x + style.cell_padding + (edit_text.len() as f32 * 7.0);
+                       ctx.primitives.draw_rect(
+                           Vec2::new(cursor_x, center_y),
+                           Vec2::new(1.0, 6.0),
+                           Vec4::new(1.0, 1.0, 1.0, 0.8),
+                           [0.0; 4],
+                           0.0
+                       );
+                   } else {
+                       let text = ds.cell_text(r, c);
+                       
+                       let (text_align_enum, text_x) = match col.align {
+                           crate::widget::TextAlign::Left => (crate::widget::TextAlign::Left, x + style.cell_padding),
+                           crate::widget::TextAlign::Center => (crate::widget::TextAlign::Center, x + w * 0.5),
+                           crate::widget::TextAlign::Right => (crate::widget::TextAlign::Right, x + w - style.cell_padding),
+                       };
+                       
+                       // Use rich text rendering for cells
+                       render_text_field(
+                           ctx,
+                           &text,
+                           Vec2::new(text_x, center_y),
+                           13.0,
+                           style.row_text_color,
+                           None,
+                           text_align_enum,
+                           Some(w),
+                       );
+                   }
                    
-                   // Use rich text rendering for cells
-                   render_text_field(
-                       ctx,
-                       &text,
-                       Vec2::new(text_x, center_y),
-                       13.0,
-                       style.row_text_color,
-                       None,
-                       text_align_enum,
-                       Some(w),
-                   );
+                   // Check for dirty state (modified)
+                   let is_dirty = id.as_ref().map(|grid_id| {
+                       ctx.interaction.as_ref()
+                           .map(|s| s.is_dirty(grid_id, r, c))
+                           .unwrap_or(false)
+                   }).unwrap_or(false);
+                   
+                   if is_dirty {
+                       // Draw small red triangle in top-right corner
+                       // Using a specialized primitive or just a small rect for now (triangle primitive not readily available?)
+                       // Actually, we can just draw a small red rect or use lines. Let's use a small square for clarity.
+                       let indicator_size = 6.0;
+                       let cell_right = x + w;
+                       let cell_top = center_y - row_height * 0.5;
+                       
+                       ctx.primitives.draw_rect(
+                           Vec2::new(cell_right - indicator_size * 0.5 - 2.0, cell_top + indicator_size * 0.5 + 2.0),
+                           Vec2::new(indicator_size * 0.5, indicator_size * 0.5),
+                           Vec4::new(1.0, 0.2, 0.2, 1.0),
+                           [1.0; 4],
+                           0.0
+                       );
+                   }
                    x += w;
                }
                r += 1;
@@ -1848,6 +1838,47 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
              y += style.row_height;
         }
     }
+    
+    Widget::KpiCard { title, value, trend, style, bounds, .. } => {
+         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+         
+         // Background
+         ctx.primitives.draw_rect(
+             Vec2::new(pos.x + bounds.width * 0.5, pos.y + bounds.height * 0.5),
+             Vec2::new(bounds.width * 0.5, bounds.height * 0.5),
+             Vec4::from(style.background),
+             [style.corner_radius; 4],
+             style.border_width
+         );
+         
+         // Title
+         let title_pos = pos + Vec2::new(12.0, 12.0);
+         ctx.text.draw(
+             ctx.device, ctx.queue, title, title_pos, style.label_size,
+             Vec4::from(style.label_color), HorizontalAlign::Left, None
+         );
+         
+         // Value
+         let val_pos = pos + Vec2::new(12.0, bounds.height * 0.6);
+         ctx.text.draw(
+              ctx.device, ctx.queue, value, val_pos, style.value_size,
+              Vec4::from(style.value_color), HorizontalAlign::Left, None
+         );
+         
+         if let Some(trend) = trend {
+             let color = match trend.direction {
+                 crate::kpi::TrendDirection::Up => style.trend_up_color,
+                 crate::kpi::TrendDirection::Down => style.trend_down_color,
+                 crate::kpi::TrendDirection::Neutral => style.trend_neutral_color,
+             };
+              // Draw trend arrow/text at top right
+              let trend_pos = pos + Vec2::new(bounds.width - 12.0, 12.0 + style.label_size * 0.5);
+               ctx.text.draw(
+                  ctx.device, ctx.queue, &trend.value, trend_pos, style.label_size,
+                  Vec4::from(color), HorizontalAlign::Right, None
+              );
+         }
+    }
   }
 }
 
@@ -2015,6 +2046,22 @@ pub fn hit_test<'a>(
              Some(HitTestResult { widget, action: id.clone() })
         } else {
              None
+        }
+    }
+    Widget::ListView { id, items, style, bounds, .. } => {
+        if point.x >= bounds.x && point.x <= bounds.x + bounds.width
+           && point.y >= bounds.y && point.y <= bounds.y + bounds.height 
+        {
+             let local_y = point.y - bounds.y;
+             let index = (local_y / style.item_height) as usize;
+             if index < items.len() {
+                 let action = format!("{}:{}", id, index);
+                 Some(HitTestResult { widget, action })
+             } else {
+                 None
+             }
+        } else {
+            None
         }
     }
     Widget::DatePicker {
@@ -2220,7 +2267,42 @@ pub fn hit_test<'a>(
                   if content_y >= 0.0 {
                       let row = (content_y / row_height).floor() as isize;
                       if row >= 0 {
-                           return Some(HitTestResult { widget, action: format!("{}:row:{}", wid, row) });
+                           // Calculate column based on local_x
+                           let content_width = (bounds.width).max(0.0);
+                           let mut total_fixed = 0.0;
+                           let mut total_flex = 0.0;
+                           
+                           for col in columns.iter() {
+                               match col.width {
+                                   crate::datagrid::ColumnWidth::Fixed(w) => total_fixed += w,
+                                   crate::datagrid::ColumnWidth::Flex(f) => total_flex += f,
+                                   _ => {}
+                               }
+                           }
+                           
+                           let available = (content_width - total_fixed).max(0.0);
+                           let mut cx = 0.0;
+                           let mut col_idx = 0usize;
+                           
+                           for (i, col) in columns.iter().enumerate() {
+                               let w = match col.width {
+                                   crate::datagrid::ColumnWidth::Fixed(w) => w,
+                                   crate::datagrid::ColumnWidth::Flex(f) => {
+                                       if total_flex > 0.0 {
+                                           (f / total_flex) * available
+                                       } else { 0.0 }
+                                   },
+                                   _ => 0.0,
+                               };
+                               
+                               if local_x >= cx && local_x < cx + w {
+                                   col_idx = i;
+                                   break;
+                               }
+                               cx += w;
+                           }
+                           
+                           return Some(HitTestResult { widget, action: format!("{}:cell:{}:{}", wid, row, col_idx) });
                       }
                   }
                   
@@ -2236,6 +2318,14 @@ pub fn hit_test<'a>(
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
              Some(HitTestResult { widget, action: id.clone() })
+        } else {
+             None
+        }
+    }
+    Widget::KpiCard { bounds, id, .. } => {
+        if point.x >= bounds.x && point.x <= bounds.x + bounds.width
+           && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
+             Some(HitTestResult { widget, action: id.clone().unwrap_or_default() })
         } else {
              None
         }
@@ -2301,6 +2391,20 @@ pub fn handle_interactions(
   offset: Vec2,
 ) -> bool {
     let mut changed = false;
+
+    // DEBUG: Log rendering
+    if let Widget::Spacer { .. } = widget {
+      // skip spacers
+    } else {
+       match widget {
+           Widget::Container { bounds, id, .. } => if bounds.width > 0.0 { println!("Render Container {:?} {:?}", id, bounds); },
+           Widget::Label { x, y, width, height, text, .. } => println!("Render Label '{}' at {},{} {}x{}", text, x, y, width, height),
+           Widget::KpiCard { bounds, title, .. } => println!("Render KpiCard '{}' {:?}", title, bounds),
+           Widget::Button { bounds, text, .. } => println!("Render Button '{}' {:?}", text, bounds),
+           Widget::ListView { bounds, items, .. } => println!("Render ListView ({} items) {:?}", items.len(), bounds),
+           _ => {},
+       }
+    }
 
     match widget {
         Widget::Container { children, bounds, padding, id, scrollable, .. } => {
@@ -2433,4 +2537,68 @@ fn handle_text_input_to_widget(widget: &mut Widget, event: &winit::event::KeyEve
     }
     
     changed
+}
+
+/// Helper to render a styled box (shadow, background, border).
+fn draw_box(
+    ctx: &mut RenderContext,
+    pos: Vec2, // Top-left
+    size: Vec2, // Width/Height (full)
+    style: &BoxStyle,
+) {
+    let center = Vec2::new(pos.x + size.x * 0.5, pos.y + size.y * 0.5);
+    let half_size = size * 0.5;
+
+    // 1. Shadow
+    if let Some(shadow) = style.shadow {
+        if shadow.color.3 > 0.0 {
+            // Shadow is drawn as a blurred rect behind the box.
+            ctx.primitives.draw_styled_rect(
+                center + Vec2::new(shadow.offset.0, shadow.offset.1),
+                half_size,
+                Vec4::from(shadow.color),
+                Vec4::from(shadow.color),
+                style.corner_radii,
+                0.0, // Stroke width
+                shadow.blur // Softness
+            );
+        }
+    }
+
+    // 2. Background (Gradient or Solid)
+    if let Some(grad) = style.gradient {
+        ctx.primitives.draw_styled_rect(
+            center,
+            half_size,
+            Vec4::from(grad.start),
+            Vec4::from(grad.end),
+            style.corner_radii,
+            0.0,
+            0.0 
+        );
+    } else if let Some(bg) = style.background {
+        if bg.3 > 0.0 {
+            // Use draw_styled_rect for consistent radius handling, or basic draw_rect
+            ctx.primitives.draw_rect(
+                center,
+                half_size,
+                Vec4::from(bg),
+                style.corner_radii,
+                0.0
+            );
+        }
+    }
+
+    // 3. Border (Stroke)
+    if let Some(border) = style.border {
+        if border.width > 0.0 && border.color.3 > 0.0 {
+             ctx.primitives.draw_rect(
+                center,
+                half_size,
+                Vec4::from(border.color),
+                style.corner_radii,
+                border.width
+             );
+        }
+    }
 }

@@ -27,6 +27,16 @@ pub struct InteractionState {
   pub validation_errors: std::collections::HashMap<String, Vec<String>>,
   /// Calendar view state for DatePicker widgets (ID -> (Month, Year)).
   pub calendar_view_state: std::collections::HashMap<String, (u32, i32)>,
+  /// Last click time (for double-click detection) - milliseconds since epoch.
+  pub last_click_time: u64,
+  /// Last click target action (for double-click detection).
+  pub last_click_target: Option<String>,
+  /// Currently editing cell in DataGrid: (grid_id, row, col).
+  pub editing_grid_cell: Option<(String, usize, usize)>,
+  /// Edit buffer for DataGrid cell editing.
+  pub grid_edit_buffer: String,
+  /// Set of dirty/modified cells: (grid_id, row, col).
+  pub dirty_cells: std::collections::HashSet<(String, usize, usize)>,
 }
 
 impl InteractionState {
@@ -159,6 +169,67 @@ impl InteractionState {
            return true; 
       }
       false
+  }
+
+  /// Checks if current click is a double-click on the same target.
+  /// Returns true if double-click detected (within 400ms).
+  pub fn check_double_click(&mut self, target: &str, now_ms: u64) -> bool {
+      let threshold_ms = 400;
+      let is_double = self.last_click_target.as_deref() == Some(target)
+          && now_ms.saturating_sub(self.last_click_time) < threshold_ms;
+      
+      self.last_click_time = now_ms;
+      self.last_click_target = Some(target.to_string());
+      is_double
+  }
+
+  /// Starts editing a DataGrid cell.
+  pub fn start_grid_edit(&mut self, grid_id: &str, row: usize, col: usize, initial_value: &str) {
+      self.editing_grid_cell = Some((grid_id.to_string(), row, col));
+      self.grid_edit_buffer = initial_value.to_string();
+  }
+
+  /// Commits the current grid cell edit.
+  /// Returns the (grid_id, row, col, new_value) if there was an edit in progress.
+  pub fn commit_grid_edit(&mut self) -> Option<(String, usize, usize, String)> {
+      if let Some((grid_id, row, col)) = self.editing_grid_cell.take() {
+          let value = std::mem::take(&mut self.grid_edit_buffer);
+          Some((grid_id, row, col, value))
+      } else {
+          None
+      }
+  }
+
+  /// Cancels the current grid cell edit without committing.
+  pub fn cancel_grid_edit(&mut self) {
+      self.editing_grid_cell = None;
+      self.grid_edit_buffer.clear();
+  }
+
+  /// Checks if currently editing a specific grid cell.
+  pub fn is_editing_cell(&self, grid_id: &str, row: usize, col: usize) -> bool {
+      self.editing_grid_cell.as_ref()
+          .map(|(g, r, c)| g == grid_id && *r == row && *c == col)
+          .unwrap_or(false)
+  }
+
+  /// Marks a cell as dirty.
+  pub fn mark_dirty(&mut self, grid_id: &str, row: usize, col: usize) {
+      self.dirty_cells.insert((grid_id.to_string(), row, col));
+  }
+
+  /// Clears dirty state for a cell (or all if None).
+  pub fn clear_dirty(&mut self, target: Option<(&str, usize, usize)>) {
+      if let Some((grid_id, row, col)) = target {
+          self.dirty_cells.remove(&(grid_id.to_string(), row, col));
+      } else {
+          self.dirty_cells.clear();
+      }
+  }
+
+  /// Checks if a cell is dirty.
+  pub fn is_dirty(&self, grid_id: &str, row: usize, col: usize) -> bool {
+      self.dirty_cells.contains(&(grid_id.to_string(), row, col))
   }
 }
 

@@ -1,0 +1,57 @@
+Container(
+    layout: (
+            direction: Column, 
+            justify_content: Start, 
+            align_items: Start, 
+            padding: 40.0, 
+            gap: 40.0
+    ),
+    flex: 1.0, 
+    children: [
+        Label(
+            text: "Dashboard Overview", 
+            size: 32.0, 
+            width: 400.0,
+            color: (1.0, 1.0, 1.0, 1.0),
+            text_align: Center
+        ),
+         // KPI Section
+        Container(
+            layout: (direction: Row, justify_content: Center, gap: 20.0),
+            children: [
+                KpiCard(
+                    title: "Total Revenue", 
+                    value: "$12,450", 
+                    trend: Some(KpiTrend(direction: Up, value: "+12.5%")),
+                    bounds: (width: 250.0, height: 140.0)
+                ),
+                KpiCard(
+                    title: "Active Users", 
+                    value: "1,240", 
+                    trend: Some(KpiTrend(direction: Up, value: "+5.2%")),
+                    bounds: (width: 250.0, height: 140.0)
+                ),
+                KpiCard(
+                    title: "Bounce Rate", 
+                    value: "42.3%", 
+                    trend: Some(KpiTrend(direction: Down, value: "-2.1%")),
+                    bounds: (width: 250.0, height: 140.0)
+                ),
+            ]
+        ),
+        
+        Spacer(size: 20.0),
+        Label(text: "Recent Activity", size: 20.0, color: (0.8, 0.8, 0.8, 1.0)),
+        
+        // Placeholder for a list or grid
+        Container(
+            bounds: (width: 800.0, height: 200.0),
+            background: Some((0.15, 0.15, 0.18, 1.0)),
+            corner_radius: 8.0,
+            padding: 20.0,
+            children: [
+                Label(text: "(Activity Log Placeholder - Imagine a DataGrid here)", size: 14.0, color: (0.5, 0.5, 0.6, 1.0))
+            ]
+        )
+    ]
+)

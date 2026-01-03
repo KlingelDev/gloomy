@@ -28,6 +28,8 @@ Container(
                 Label(
                   text: "Gloomy Dashboard",
                   size: 24.0,
+                  width: 400.0,
+                  text_align: Left,
                   color: (1.0, 1.0, 1.0, 1.0),
                 ),
              ]
@@ -78,6 +80,8 @@ Container(
             Label(
               text: "A keyboard-centric UI library loaded from RON.",
               size: 14.0,
+              width: 600.0,
+              text_align: Left,
               color: (0.7, 0.7, 0.7, 1.0),
             ),
             Spacer(size: 20.0),

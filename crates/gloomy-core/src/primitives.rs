@@ -172,7 +172,7 @@ impl PrimitiveRenderer {
   pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32, scale_factor: f32) {
     self.width = width;
     self.height = height;
-    self.screen_size = Vec2::new(width as f32 / scale_factor, height as f32 / scale_factor);
+    self.screen_size = Vec2::new((width as f32).max(1.0) / scale_factor, (height as f32).max(1.0) / scale_factor);
     queue.write_buffer(
       &self.uniform_buffer,
       0,
@@ -375,7 +375,7 @@ impl PrimitiveRenderer {
              }
          } else {
              // Full screen
-             render_pass.set_scissor_rect(0, 0, self.width, self.height);
+              render_pass.set_scissor_rect(0, 0, self.width, self.height);
          }
          render_pass.draw(0..6, batch.range.clone());
     }

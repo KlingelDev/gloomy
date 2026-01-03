@@ -469,6 +469,8 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::RadioButton { flex, .. } => *flex,
     Widget::Dropdown { flex, .. } => *flex,
     Widget::Tree { flex, .. } => *flex,
+    Widget::KpiCard { flex, .. } => *flex,
+    Widget::ListView { flex, .. } => *flex,
   }
 }
 
@@ -597,6 +599,11 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         let h = if style.track_height > 0.0 { style.track_height.max(style.thumb_radius * 2.0) } else { 20.0 };
         (w, h)
     },
+    Widget::ListView { items, style, width, height, .. } => {
+        let h = height.unwrap_or(items.len() as f32 * style.item_height);
+        let w = width.unwrap_or(200.0); // Default width if not flexible
+        (w, h)
+    },
     Widget::ProgressBar { width, height, style, .. } => {
         let w = if let Some(w) = width { *w } else { 200.0 };
         let h = if let Some(h) = height { *h } else { 20.0 };
@@ -611,10 +618,8 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         let h = if let Some(h) = height { *h } else { 32.0 };
         (w, h)
     },
-    Widget::Tree { bounds, root_nodes, expanded_ids, style, .. } => {
-         let h = calculate_tree_height(root_nodes, expanded_ids, style.row_height);
-         (bounds.width.max(200.0), h.max(style.row_height))
-    },
+    Widget::Tree { bounds, .. } => (bounds.width, bounds.height),
+    Widget::KpiCard { bounds, .. } => (bounds.width, bounds.height),
   }
 }
 
@@ -626,6 +631,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
       bounds.height = h;
     }
     Widget::Image { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
+    Widget::ListView { bounds, .. } => {
         bounds.width = w;
         bounds.height = h;
     }
@@ -717,6 +726,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
         bounds.width = w;
         bounds.height = h;
     }
+    Widget::KpiCard { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
   }
 }
 
@@ -759,6 +772,14 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
       bounds.x = x;
       bounds.y = y;
     }
+    Widget::KpiCard { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
+    Widget::ListView { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
     Widget::Spacer { .. } => {}
     Widget::Divider { bounds, .. } => {
       bounds.x = x;
@@ -800,6 +821,14 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
         bounds.x = x;
         bounds.y = y;
     }
+    Widget::KpiCard { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
+    Widget::ListView { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
   }
 }
 
@@ -826,6 +855,9 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::ProgressBar { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::RadioButton { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Dropdown { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Tree { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::KpiCard { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::ListView { grid_col, .. } => grid_col.unwrap_or(0),
   }
 }
 
@@ -852,6 +884,8 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::RadioButton { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Dropdown { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Tree { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::KpiCard { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::ListView { grid_row, .. } => grid_row.unwrap_or(0),
   }
 }
 
@@ -879,6 +913,8 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::RadioButton { grid_col, .. } => *grid_col,
     Widget::Dropdown { grid_col, .. } => *grid_col,
     Widget::Tree { grid_col, .. } => *grid_col,
+    Widget::KpiCard { grid_col, .. } => *grid_col,
+    Widget::ListView { grid_col, .. } => *grid_col,
   }
 }
 
@@ -905,6 +941,8 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::RadioButton { grid_row, .. } => *grid_row,
     Widget::Dropdown { grid_row, .. } => *grid_row,
     Widget::Tree { grid_row, .. } => *grid_row,
+    Widget::KpiCard { grid_row, .. } => *grid_row,
+    Widget::ListView { grid_row, .. } => *grid_row,
   }
 }
 
@@ -931,6 +969,8 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::RadioButton { col_span, .. } => *col_span,
     Widget::Dropdown { col_span, .. } => *col_span,
     Widget::Tree { col_span, .. } => *col_span,
+    Widget::KpiCard { col_span, .. } => *col_span,
+    Widget::ListView { col_span, .. } => *col_span,
   }
 }
 
@@ -957,5 +997,7 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::RadioButton { row_span, .. } => *row_span,
     Widget::Tree { row_span, .. } => *row_span,
     Widget::Button { row_span, .. } => *row_span,
+    Widget::KpiCard { row_span, .. } => *row_span,
+    Widget::ListView { row_span, .. } => *row_span,
   }
 }

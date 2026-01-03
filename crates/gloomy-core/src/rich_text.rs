@@ -202,7 +202,7 @@ impl MarkupParser {
         };
         
         if is_closing {
-            Ok(Tag::Close(tag_type))
+            Ok(Tag::Close(()))
         } else {
             Ok(Tag::Open(tag_type, attrs))
         }
@@ -407,7 +407,7 @@ impl MarkupParser {
 #[derive(Debug)]
 enum Tag {
     Open(TagType, HashMap<String, String>),
-    Close(TagType),
+    Close(()),
 }
 
 #[derive(Debug, Clone, PartialEq)]

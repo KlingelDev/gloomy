@@ -1,0 +1,107 @@
+Container(
+    bounds: (width: 1024.0, height: 768.0),
+    background: Some((0.05, 0.05, 0.08, 1.0)),
+    layout: (
+        direction: Column, 
+        justify_content: Start, 
+        align_items: Center, 
+        padding: 40.0, 
+        gap: 40.0
+    ),
+    children: [
+        // Header
+        Label(
+            text: "Gloomy UI Showcase", 
+            size: 32.0, 
+            width: 400.0,
+            color: (1.0, 1.0, 1.0, 1.0),
+            text_align: Center
+        ),
+
+        // KPI Section
+        Container(
+            layout: (direction: Row, justify_content: Center, gap: 20.0),
+            children: [
+                KpiCard(
+                    title: "Total Revenue", 
+                    value: "$12,450", 
+                    trend: Some(KpiTrend(direction: Up, value: "+12.5%")),
+                    bounds: (width: 280.0, height: 140.0)
+                ),
+                KpiCard(
+                    title: "Active Users", 
+                    value: "1,240", 
+                    trend: Some(KpiTrend(direction: Up, value: "+5.2%")),
+                    bounds: (width: 280.0, height: 140.0)
+                ),
+                KpiCard(
+                    title: "Bounce Rate", 
+                    value: "42.3%", 
+                    trend: Some(KpiTrend(direction: Down, value: "-2.1%")),
+                    bounds: (width: 280.0, height: 140.0)
+                ),
+            ]
+        ),
+
+        Spacer(size: 20.0),
+
+        // Form Section
+        Container(
+            bounds: (width: 880.0, height: 300.0),
+            background: Some((0.1, 0.1, 0.12, 1.0)),
+            corner_radius: 12.0,
+            padding: 30.0,
+            layout: (direction: Column, justify_content: Start, align_items: Start, gap: 20.0),
+            children: [
+                Label(text: "User Configuration", size: 24.0, color: (0.9, 0.9, 0.9, 1.0)),
+                
+                // Row 1: Inputs
+                Container(
+                    layout: (direction: Row, align_items: Center, gap: 20.0),
+                    children: [
+                        TextInput(
+                            id: "username",
+                            placeholder: "Username",
+                            value: "",
+                            width: 300.0,
+                            height: 40.0
+                        ),
+                        TextInput(
+                            id: "email",
+                            placeholder: "Email Address",
+                            value: "",
+                            width: 300.0,
+                            height: 40.0
+                        )
+                    ]
+                ),
+
+                // Row 2: Toggles
+                Container(
+                    layout: (direction: Row, align_items: Center, gap: 30.0),
+                    children: [
+                        Container(layout: (direction: Row, align_items: Center, gap: 10.0), children: [
+                            ToggleSwitch(id: "notifications", checked: true),
+                            Label(text: "Enable Notifications", size: 16.0)
+                        ]),
+                        Container(layout: (direction: Row, align_items: Center, gap: 10.0), children: [
+                            Checkbox(id: "terms", checked: false),
+                            Label(text: "I agree to Terms & Conditions", size: 16.0)
+                        ]),
+                    ]
+                ),
+
+                Spacer(size: 10.0),
+
+                // Row 3: Actions
+                Button(
+                    text: "Save Settings",
+                    action: "save",
+                    bounds: (width: 160.0, height: 45.0),
+                    background: (0.2, 0.5, 0.9, 1.0),
+                    corner_radius: 6.0
+                )
+            ]
+        )
+    ]
+)

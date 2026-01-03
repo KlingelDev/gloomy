@@ -253,7 +253,19 @@ pub struct DataGrid {
 
     /// Calculated column widths (computed during layout)
     #[serde(skip)]
-    pub(crate) calculated_column_widths: Vec<f32>,
+    pub(crate) _calculated_column_widths: Vec<f32>,
+
+    /// Currently editing cell (row, col)
+    #[serde(skip)]
+    pub editing_cell: Option<(usize, usize)>,
+
+    /// In-progress edit text buffer
+    #[serde(skip)]
+    pub edit_buffer: String,
+
+    /// Set of dirty/modified cells (row, col)
+    #[serde(skip)]
+    pub dirty_cells: HashSet<(usize, usize)>,
 
     // --- Layout fields ---
     /// Flex weight for layout
@@ -296,7 +308,10 @@ impl DataGrid {
             sort_direction: SortDirection::Ascending,
             selected_rows: HashSet::new(),
             hovered_row: None,
-            calculated_column_widths: Vec::new(),
+            _calculated_column_widths: Vec::new(),
+            editing_cell: None,
+            edit_buffer: String::new(),
+            dirty_cells: HashSet::new(),
             flex: 0.0,
             grid_col: None,
             grid_row: None,

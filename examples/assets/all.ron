@@ -1,0 +1,99 @@
+Container(
+    layout: (
+        direction: Column,
+        justify_content: Start,
+        align_items: Stretch,
+        spacing: 20.0,
+    ),
+    padding: 20.0,
+    children: [
+        Label(text: "All Widgets Verification", size: 24.0, color: (1.0, 1.0, 1.0, 1.0)),
+        
+        // 1. Basic Inputs
+        Container(
+            layout: (direction: Row, spacing: 10.0),
+            children: [
+                Button(text: "Button", action: "btn1"),
+                Checkbox(id: "chk1", checked: true),
+                ToggleSwitch(id: "swt1", checked: false),
+            ]
+        ),
+        
+        // 2. Text Inputs
+        Container(
+            layout: (direction: Column, spacing: 10.0),
+            children: [
+                TextInput(id: "txt1", value: "Text Input", placeholder: "Type here..."),
+                NumberInput(id: "num1", value: 42.0),
+                Autocomplete(id: "auto1", value: "", options: ["Option A", "Option B"]),
+            ]
+        ),
+        
+        // 3. Selection & Pickers
+        Container(
+            layout: (direction: Row, spacing: 10.0),
+            children: [
+                Dropdown(id: "drop1", options: ["Item 1", "Item 2"], selected_index: Some(0)),
+                DatePicker(id: "date1", value: None),
+                RadioButton(group_id: "g1", value: "opt1", selected: true, label: "Radio 1"),
+                RadioButton(group_id: "g1", value: "opt2", selected: false, label: "Radio 2"),
+            ]
+        ),
+        
+        // 4. Sliders & Progress
+        Container(
+            layout: (direction: Column, spacing: 10.0),
+            children: [
+                Slider(id: "sld1", value: 50.0, min: 0.0, max: 100.0),
+                ProgressBar(value: 0.7),
+            ]
+        ),
+        
+        // 5. Complex Data
+        Container(
+            height: Some(200.0), // Constrain height for grid/tree
+            layout: (direction: Row, spacing: 10.0),
+            children: [
+                // DataGrid
+                DataGrid(
+                    id: Some("grid1"),
+                    columns: [
+                        (header: "Name", field: "name", width: Flex(1.0)),
+                        (header: "Age", field: "age", width: Fixed(50.0)),
+                    ],
+                    data_source_id: None,
+                ),
+                
+                // Tree
+                Tree(
+                    id: Some("tree1"),
+                    root_nodes: [
+                        (id: "n1", label: "Root 1", children: [
+                            (id: "c1", label: "Child 1", leaf: true),
+                        ]),
+                        (id: "n2", label: "Root 2", leaf: true),
+                    ],
+                ),
+            ]
+        ),
+        
+        // 6. Visuals
+        Container(
+            layout: (direction: Row, spacing: 10.0),
+            children: [
+                Icon(id: "icon1", icon_name: "user", size: 32.0, color: Some((1.0, 1.0, 1.0, 1.0))),
+                Image(path: "logo.png"), 
+                Divider(orientation: Horizontal, thickness: 2.0),
+                Spacer(size: 20.0),
+            ]
+        ),
+        
+        // 7. KPI
+        KpiCard(
+             title: "KPI Test", 
+             value: "100%", 
+             trend: Some((direction: Up, value: "+5%")),
+             style: (background: (0.2, 0.2, 0.2, 1.0), border_color: (0.5, 0.5, 0.5, 1.0), border_width: 1.0, corner_radius: 5.0, label_color: (1.0, 1.0, 1.0, 1.0), label_size: 12.0, value_color: (1.0, 1.0, 1.0, 1.0), value_size: 20.0, trend_up_color: (0.0, 1.0, 0.0, 1.0), trend_down_color: (1.0, 0.0, 0.0, 1.0), trend_neutral_color: (0.5, 0.5, 0.5, 1.0))
+        ),
+    ]
+)

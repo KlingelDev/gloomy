@@ -54,6 +54,22 @@ pub trait DataSource: Send + Sync {
     fn sort(&mut self, _col: usize, _direction: SortDirection) {
         // Default implementation does nothing
     }
+
+    /// Sets a cell value. Returns true if successful.
+    /// Default implementation returns false (read-only).
+    fn set_cell(&mut self, _row: usize, _col: usize, _value: CellValue) -> bool {
+        false
+    }
+
+    /// Adds a new empty row at end. Returns new row index if supported.
+    fn add_row_default(&mut self) -> Option<usize> {
+        None
+    }
+
+    /// Deletes a row at the given index. Returns true if successful.
+    fn delete_row(&mut self, _row: usize) -> bool {
+        false
+    }
 }
 
 /// Represents a cell value with type information for sorting.
@@ -180,6 +196,32 @@ impl DataSource for VecDataSource {
                 SortDirection::Descending => cmp.reverse(),
             }
         });
+    }
+
+    fn set_cell(&mut self, row: usize, col: usize, value: CellValue) -> bool {
+        if let Some(r) = self.rows.get_mut(row) {
+            if col < r.len() {
+                r[col] = value;
+                return true;
+            }
+        }
+        false
+    }
+
+    fn add_row_default(&mut self) -> Option<usize> {
+        let col_count = self.columns.len();
+        let new_row = vec![CellValue::None; col_count];
+        self.rows.push(new_row);
+        Some(self.rows.len() - 1)
+    }
+
+    fn delete_row(&mut self, row: usize) -> bool {
+        if row < self.rows.len() {
+            self.rows.remove(row);
+            true
+        } else {
+            false
+        }
     }
 }
 
