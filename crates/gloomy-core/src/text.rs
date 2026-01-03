@@ -393,8 +393,8 @@ impl TextRenderer {
   ) {
       if self.pending.is_empty() { return; }
       
-      // Sort by scissor rect to minimize state changes
-      self.pending.sort_by(|a, b| a.4.cmp(&b.4));
+      // Sort by scissor rect - REVERSE order so None renders LAST (on top)
+      self.pending.sort_by(|a, b| b.4.cmp(&a.4));
       
       let scale = self.scale_factor;
       let width = self.width;
@@ -462,8 +462,10 @@ impl TextRenderer {
                    let sw = w.min(width - sx);
                    let sh = h.min(height - sy);
                    
+                   log::info!("  Batch scissor: Some({},{},{},{})", sx, sy, sw, sh);
                    rpass.set_scissor_rect(sx, sy, sw, sh);
                } else {
+                   log::info!("  Batch scissor: None -> fullscreen ({},{})", width, height);
                    rpass.set_scissor_rect(0, 0, width, height);
                }
                

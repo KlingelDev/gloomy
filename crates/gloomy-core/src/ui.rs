@@ -431,17 +431,10 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         }
     }
     Widget::Container { id, children, bounds, padding: _, background, corner_radius, scrollable, shadow, gradient, border, layout_cache, render_cache, .. } => {
-      // --- RENDER CACHE CHECK ---
-      if let Some(l_cache) = layout_cache {
-          if l_cache.valid {
-              if let Some(r_cache) = render_cache.borrow().as_ref() {
-                   // Check if bounds match? Layout cache validity implies bounds are consistent with constraints.
-                   // So we can safely replay.
-                   ctx.replay_cache(r_cache);
-                   return;
-              }
-          }
-      }
+      // --- RENDER CACHE DISABLED ---
+      // The render cache is causing issues with initial sizing and scroll updates.
+      // TODO: Implement proper cache invalidation based on scroll state and layout changes.
+      // For now, always re-render containers to ensure correctness.
 
       let capture_state = ctx.begin_capture();
 
@@ -557,11 +550,6 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       let scissor_w = (*width * s).max(0.0) as u32;
       let scissor_h = (*height * s).max(0.0) as u32;
 
-      // Debug
-      if text.starts_with("Large") {
-          log::info!("Label Render: '{}' Size={}x{} Scissor={:?}", text, width, height, (scissor_x, scissor_y, scissor_w, scissor_h));
-      }
-      
       let old_scissor = if scissor_w > 0 && scissor_h > 0 {
         Some(ctx.text.set_scissor(Some((scissor_x, scissor_y, scissor_w, scissor_h))))
       } else {
@@ -886,19 +874,16 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       
       // Calculate Scroll Offset
       let scroll_offset = id.as_ref()
-           .and_then(|i| ctx.interaction.as_ref().map(|s| s.scroll_offsets.get(i)))
-           .flatten()
-           .map(|v| v.y)
-           .unwrap_or(0.0);
+          .and_then(|grid_id| {
+              ctx.interaction.as_ref()
+                  .and_then(|i| i.scroll_offsets.get(grid_id.as_str()))
+          })
+          .map(|v| v.y)
+          .unwrap_or(0.0);
 
       // 1. Resolve Data Source
       let source = data_source_id.as_ref()
            .and_then(|id| ctx.data_provider.and_then(|dp| dp.get_source(id)));
-      
-      // Debug Logging
-      if columns.len() > 0 {
-          log::info!("DataGrid Render: Bounds={:?}, Scale={}", bounds, ctx.scale_factor);
-      }
 
       // 2. Calculate column widths
       let available_width = bounds.width;
@@ -1154,6 +1139,12 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
              HorizontalAlign::Left,
              None,
            );
+            
+            // Debug header text
+            if i == 0 {
+                log::info!("Header[0] '{}' at ({}, {})", 
+                           col.header, x + style.cell_padding, pos.y + header_height * 0.5);
+            }
 
             // Check for Hovered Resize
             let mut is_resize_hover = false;

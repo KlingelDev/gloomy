@@ -120,9 +120,9 @@ impl InteractionState {
 
   /// Handle scroll event for a specific widget ID.
   pub fn handle_scroll(&mut self, id: &str, delta: Vec2) {
-      let current = self.scroll_offsets.entry(id.to_string()).or_insert(Vec2::ZERO);
-      current.x -= delta.x;
-      current.y -= delta.y;
+    let entry = self.scroll_offsets.entry(id.to_string()).or_insert(Vec2::ZERO);
+    entry.x -= delta.x;
+    entry.y -= delta.y;
   }
 }
 
