@@ -186,34 +186,38 @@ fn main() -> anyhow::Result<()> {
         })
         .on_mouse_input(move |_win, element_state, _button| {
             let mut s = state_click.borrow_mut();
-            s.interaction.set_pressed(element_state == ElementState::Pressed);
+            let app_state = &mut *s;
+            let ui = &mut app_state.ui;
+            let interaction = &mut app_state.interaction;
+            
+            interaction.set_pressed(element_state == ElementState::Pressed);
             
             if element_state == ElementState::Pressed {
                  // Clone needed for lifetime issues in hit_test vs check_validations
-                 let mouse_pos = s.interaction.mouse_pos;
+                 let mouse_pos = interaction.mouse_pos;
                  
                  // Use generic hit test
-                 let hit = hit_test(&s.ui, mouse_pos, Some(&s.interaction)).map(|h| h.action.to_string());
+                 let hit = hit_test(ui, mouse_pos, Some(interaction)).map(|h| h.action.to_string());
                  
                  if let Some(action) = hit {
                      println!("Clicked: {}", action);
                      
                      // Focus handling
                      if action == "name_input" || action == "age_input" || action == "country_input" {
-                         s.interaction.focused_id = Some(action.clone());
+                         interaction.focused_id = Some(action.clone());
                      } else if !action.contains(":opt:") && !action.contains(":up") && !action.contains(":down") {
                          // Click outside -> Blur
-                         s.interaction.focused_id = None;
+                         interaction.focused_id = None;
                      }
 
                      // Autocomplete Selection
                      if action.starts_with("country_input:opt:") {
                          let parts: Vec<&str> = action.split(":opt:").collect();
                          if let Ok(idx) = parts[1].parse::<usize>() {
-                             if let Some(Widget::Autocomplete { value, suggestions, .. }) = find_widget_mut(&mut s.ui, "country_input") {
+                             if let Some(Widget::Autocomplete { value, suggestions, .. }) = find_widget_mut(ui, "country_input") {
                                  if idx < suggestions.len() {
                                      *value = suggestions[idx].clone();
-                                     s.interaction.focused_id = None; // Close dropdown
+                                     interaction.focused_id = None; // Close dropdown
                                  }
                              }
                          }
@@ -221,12 +225,12 @@ fn main() -> anyhow::Result<()> {
                      
                      // NumberInput Spinner
                      if action == "age_input:up" {
-                         if let Some(Widget::NumberInput { value, step, max, .. }) = find_widget_mut(&mut s.ui, "age_input") {
+                         if let Some(Widget::NumberInput { value, step, max, .. }) = find_widget_mut(ui, "age_input") {
                              *value += *step;
                              if let Some(m) = max { *value = value.min(*m); }
                          }
                      } else if action == "age_input:down" {
-                         if let Some(Widget::NumberInput { value, step, min, .. }) = find_widget_mut(&mut s.ui, "age_input") {
+                         if let Some(Widget::NumberInput { value, step, min, .. }) = find_widget_mut(ui, "age_input") {
                              *value -= *step;
                              if let Some(m) = min { *value = value.max(*m); }
                          }
@@ -238,29 +242,31 @@ fn main() -> anyhow::Result<()> {
                          let mut all_errors = std::collections::HashMap::new();
                          
                          // Helper to validate a specific widget
-                         let mut check_widget = |id: &str| {
-                             if let Some(w) = find_widget_mut(&mut s.ui, id) {
+                         // Note: we can't use a closure easily due to borrow checker with 'ui', so we just inline or iterate manually if needed.
+                         // But iterating 'find_widget_mut' multiple times is fine if 'ui' is re-borrowable. 
+                         // Check bounds: 'ui' is &mut Widget. find_widget_mut borrows it. 
+                         // If we do sequential calls it is fine.
+                         
+                         let ids = vec!["name_input", "age_input", "country_input"];
+                         for id in ids {
+                             if let Some(w) = find_widget_mut(ui, id) {
                                  let errors = w.validate();
                                  if !errors.is_empty() {
                                      all_errors.insert(id.to_string(), errors);
                                  }
                              }
-                         };
+                         }
                          
-                         check_widget("name_input");
-                         check_widget("age_input");
-                         check_widget("country_input");
-                         
-                         s.interaction.validation_errors = all_errors;
-                         if s.interaction.validation_errors.is_empty() {
+                         interaction.validation_errors = all_errors;
+                         if interaction.validation_errors.is_empty() {
                              println!("Form Submitted Successfully!");
                          } else {
-                             println!("Form Validation Failed: {:?}", s.interaction.validation_errors);
+                             println!("Form Validation Failed: {:?}", interaction.validation_errors);
                          }
                      }
                  } else {
                      // Clicked nothing interactive -> Blur
-                     s.interaction.focused_id = None;
+                     interaction.focused_id = None;
                  }
             }
         })
@@ -279,6 +285,10 @@ fn main() -> anyhow::Result<()> {
                                  } else if let winit::keyboard::Key::Named(winit::keyboard::NamedKey::Backspace) = &event.logical_key {
                                      value.pop();
                                  }
+                                  if let Widget::Autocomplete { value, suggestions, .. } = w {
+                                      let v = value.to_lowercase();
+                                      *suggestions = countries.iter().filter(|c| c.to_lowercase().contains(&v)).cloned().collect();
+                                  }
                              }
                              _ => {}
                          }

@@ -30,6 +30,9 @@ const ROBOTO_CONDENSED_BOLD_ITALIC: &[u8] = include_bytes!("../../../assets/font
 pub struct GloomyRenderer {
   primitives: PrimitiveRenderer,
   text: TextRenderer,
+  // Overlay renderers for deferred content (dropdowns, tooltips)
+  overlay_primitives: PrimitiveRenderer,
+  overlay_text: TextRenderer,
   images: ImageRenderer,
   textures: HashMap<String, Texture>,
   width: u32,
@@ -54,6 +57,7 @@ impl GloomyRenderer {
     scale_factor: f32,
   ) -> Self {
     let primitives = PrimitiveRenderer::new(device, format, width, height);
+    let overlay_primitives = PrimitiveRenderer::new(device, format, width, height);
     
     // Load all available font families (10 fonts total)
     let text = TextRenderer::new_with_all_families(
@@ -72,12 +76,23 @@ impl GloomyRenderer {
       ROBOTO_CONDENSED_ITALIC,
       ROBOTO_CONDENSED_BOLD_ITALIC,
     );
+
+    // Initial output text renderer for overlay (lightweight, default font only)
+    let overlay_text = TextRenderer::new(
+      device,
+      format,
+      width,
+      height,
+      DEFAULT_FONT,
+    );
     
     let images = ImageRenderer::new(device, format, width, height);
 
     Self {
       primitives,
       text,
+      overlay_primitives,
+      overlay_text,
       images,
       textures: HashMap::new(),
       width,
@@ -97,12 +112,16 @@ impl GloomyRenderer {
     font_bytes: &[u8],
   ) -> Self {
     let primitives = PrimitiveRenderer::new(device, format, width, height);
+    let overlay_primitives = PrimitiveRenderer::new(device, format, width, height);
     let text = TextRenderer::new(device, format, width, height, font_bytes);
+    let overlay_text = TextRenderer::new(device, format, width, height, font_bytes);
     let images = ImageRenderer::new(device, format, width, height);
 
     Self {
       primitives,
       text,
+      overlay_primitives,
+      overlay_text,
       images,
       textures: HashMap::new(),
       width,
@@ -124,7 +143,9 @@ impl GloomyRenderer {
     self.height = height;
     self.scale_factor = scale_factor;
     self.primitives.resize(queue, width, height, scale_factor);
+    self.overlay_primitives.resize(queue, width, height, scale_factor);
     self.text.resize(queue, width, height, scale_factor);
+    self.overlay_text.resize(queue, width, height, scale_factor);
     self.images.resize(queue, width, height);
   }
 
@@ -157,11 +178,6 @@ impl GloomyRenderer {
   }
 
   /// Splits the renderer into mutable references components.
-  pub fn split_mut(
-    &mut self,
-  ) -> (&mut PrimitiveRenderer, &mut TextRenderer, &mut ImageRenderer, &mut HashMap<String, Texture>) {
-    (&mut self.primitives, &mut self.text, &mut self.images, &mut self.textures)
-  }
 
   /// Adds a new font to the renderer.
   pub fn add_font(&mut self, name: &str, font_bytes: &[u8]) {
@@ -203,6 +219,7 @@ impl GloomyRenderer {
   /// Prepares all draw commands for submission.
   pub fn prepare(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
     self.primitives.prepare(device, queue);
+    self.overlay_primitives.prepare(device, queue);
     self.images.prepare(device, queue);
   }
 
@@ -254,6 +271,39 @@ impl GloomyRenderer {
     self.images.clear(); // Clear instance list after render
 
     // Text pass (now manages its own passes)
+    // Text pass (now manages its own passes)
     self.text.render(encoder, view, device, queue);
+    
+    // --- Overlay Primitives Pass ---
+    {
+      let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("GloomyOverlayPrimitivesPass"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+          view,
+          resolve_target: None,
+          ops: wgpu::Operations {
+            load: wgpu::LoadOp::Load, // Overlay on top of existing
+            store: wgpu::StoreOp::Store,
+          },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+      });
+      self.overlay_primitives.render(&mut rp);
+    }
+    
+    // --- Overlay Text Pass ---
+    self.overlay_text.render(encoder, view, device, queue);
+  }
+
+  /// Splits renderer to access main layers mutably
+  pub fn split_mut(&mut self) -> (&mut PrimitiveRenderer, &mut TextRenderer, &mut ImageRenderer, &mut HashMap<String, Texture>) {
+      (&mut self.primitives, &mut self.text, &mut self.images, &mut self.textures)
+  }
+
+  /// Splits renderer to access overlay layers mutably
+  pub fn split_overlay_mut(&mut self) -> (&mut PrimitiveRenderer, &mut TextRenderer) {
+      (&mut self.overlay_primitives, &mut self.overlay_text)
   }
 }

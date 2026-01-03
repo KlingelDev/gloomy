@@ -6,6 +6,7 @@ use crate::layout::Layout;
 use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
 use crate::validation::ValidationRule;
+use chrono::NaiveDate;
 
 /// RGBA color as tuple for serde.
 pub type Color = (f32, f32, f32, f32);
@@ -556,6 +557,41 @@ pub enum Widget {
       row_span: usize,
   },
 
+  /// Date picker widget with calendar dropdown.
+  DatePicker {
+      id: String,
+      #[serde(default)]
+      value: Option<NaiveDate>,
+      #[serde(default)]
+      placeholder: String,
+      #[serde(default)]
+      min_date: Option<NaiveDate>,
+      #[serde(default)]
+      max_date: Option<NaiveDate>,
+      #[serde(default = "default_date_format")]
+      format: String,
+      #[serde(default)]
+      bounds: WidgetBounds,
+      #[serde(default)]
+      style: DatePickerStyle,
+      #[serde(default)]
+      validation: Option<Vec<ValidationRule>>,
+      #[serde(default)]
+      width: f32,
+      #[serde(default)]
+      height: f32,
+      #[serde(default)]
+      flex: f32,
+      #[serde(default)]
+      grid_col: Option<usize>,
+      #[serde(default)]
+      grid_row: Option<usize>,
+      #[serde(default = "default_span_one")]
+      col_span: usize,
+      #[serde(default = "default_span_one")]
+      row_span: usize,
+  },
+
   /// Checkbox toggle.
   Checkbox {
     id: String,
@@ -799,6 +835,7 @@ impl Widget {
           Widget::TextInput { bounds, .. } => *bounds,
           Widget::NumberInput { bounds, .. } => *bounds,
           Widget::Autocomplete { bounds, .. } => *bounds,
+          Widget::DatePicker { bounds, .. } => *bounds,
           Widget::Checkbox { bounds, .. } => *bounds,
           Widget::Slider { bounds, .. } => *bounds,
           Widget::Image { bounds, .. } => *bounds,
@@ -822,6 +859,8 @@ impl Widget {
           Widget::Button { action, .. } => Some(action),
           Widget::TextInput { id, .. } => Some(id),
           Widget::NumberInput { id, .. } => Some(id),
+          Widget::Autocomplete { id, .. } => Some(id),
+          Widget::DatePicker { id, .. } => Some(id),
           Widget::Checkbox { id, .. } => Some(id),
           Widget::Slider { id, .. } => Some(id),
           Widget::ToggleSwitch { id, .. } => Some(id),
@@ -847,6 +886,31 @@ impl Widget {
               for rule in rules {
                   if let Err(e) = rule.validate(&val_str) {
                       errors.push(e);
+                  }
+              }
+          }
+          Widget::Autocomplete { value, validation: Some(rules), .. } => {
+              for rule in rules {
+                  if let Err(e) = rule.validate(value) {
+                      errors.push(e);
+                  }
+              }
+          }
+          Widget::DatePicker { value, min_date, max_date, validation, .. } => {
+              if let Some(val) = value {
+                  if let Some(min) = min_date {
+                      if *val < *min { errors.push(format!("Date must be after {}", min)); }
+                  }
+                  if let Some(max) = max_date {
+                      if *val > *max { errors.push(format!("Date must be before {}", max)); }
+                  }
+              }
+              if let Some(rules) = validation {
+                  let val_str = value.map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or_default();
+                  for rule in rules {
+                       if let Err(e) = rule.validate(&val_str) {
+                           errors.push(e);
+                       }
                   }
               }
           }
@@ -1019,6 +1083,76 @@ impl Default for AutocompleteStyle {
     }
 }
 
+/// Style for DatePicker widget.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DatePickerStyle {
+    #[serde(default)]
+    pub background: Option<Color>,
+    #[serde(default)]
+    pub background_focused: Option<Color>,
+    #[serde(default)]
+    pub border: Option<Border>,
+    #[serde(default)]
+    pub border_focused: Option<Border>,
+    #[serde(default = "default_text_color")]
+    pub text_color: Color,
+    #[serde(default = "default_placeholder_color")]
+    pub placeholder_color: Color,
+    #[serde(default)]
+    pub corner_radius: f32,
+    #[serde(default)]
+    pub font: Option<String>,
+    // Calendar Popup Styles
+    #[serde(default)]
+    pub calendar_background: Option<Color>,
+    #[serde(default)]
+    pub calendar_border: Option<Border>,
+    #[serde(default = "default_text_color")]
+    pub day_text_color: Color,
+    #[serde(default = "default_highlight_color")]
+    pub selected_day_color: Color,
+    #[serde(default = "default_today_color")]
+    pub today_color: Color,
+    #[serde(default = "default_day_hover_color")]
+    pub day_hover_color: Color,
+    #[serde(default = "default_month_header_color")]
+    pub month_header_color: Color,
+}
+
+impl Default for DatePickerStyle {
+    fn default() -> Self {
+        Self {
+            background: Some((0.15, 0.15, 0.18, 1.0)),
+            background_focused: Some((0.18, 0.18, 0.22, 1.0)),
+            border: Some(Border {
+                width: 1.0,
+                color: (0.3, 0.3, 0.35, 1.0),
+                ..Default::default()
+            }),
+            border_focused: Some(Border {
+                width: 1.0,
+                color: (0.4, 0.6, 1.0, 1.0),
+                ..Default::default()
+            }),
+            text_color: (0.9, 0.9, 0.9, 1.0),
+            placeholder_color: default_placeholder_color(),
+            corner_radius: 4.0,
+            font: None,
+            calendar_background: Some((0.12, 0.12, 0.15, 1.0)),
+            calendar_border: Some(Border {
+                width: 1.0,
+                color: (0.25, 0.25, 0.3, 1.0),
+                ..Default::default()
+            }),
+            day_text_color: (0.9, 0.9, 0.9, 1.0),
+            selected_day_color: (0.25, 0.5, 0.8, 1.0),
+            today_color: default_today_color(),
+            day_hover_color: default_day_hover_color(),
+            month_header_color: default_month_header_color(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CheckboxStyle {
     #[serde(default = "default_checkbox_color")]
@@ -1061,6 +1195,10 @@ fn default_spinner_color() -> Color { (0.5, 0.5, 0.55, 1.0) }
 fn default_spinner_hover_color() -> Color { (0.7, 0.7, 0.75, 1.0) }
 fn default_max_visible() -> usize { 5 }
 fn default_highlight_color() -> Color { (0.25, 0.35, 0.5, 1.0) }
+fn default_date_format() -> String { "%Y-%m-%d".to_string() }
+fn default_today_color() -> Color { (0.3, 0.5, 0.3, 1.0) }
+fn default_day_hover_color() -> Color { (0.2, 0.2, 0.25, 1.0) }
+fn default_month_header_color() -> Color { (0.8, 0.8, 0.85, 1.0) }
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

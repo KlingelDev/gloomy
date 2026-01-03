@@ -2,6 +2,7 @@
 
 use crate::widget::Widget;
 use glam::Vec2;
+use chrono::{Datelike, Local};
 
 /// Tracks the state of user interaction (mouse, hover, active).
 #[derive(Debug, Default, Clone)]
@@ -24,6 +25,8 @@ pub struct InteractionState {
   pub scroll_offsets: std::collections::HashMap<String, Vec2>,
   /// Validation errors for widgets (ID -> List of errors).
   pub validation_errors: std::collections::HashMap<String, Vec<String>>,
+  /// Calendar view state for DatePicker widgets (ID -> (Month, Year)).
+  pub calendar_view_state: std::collections::HashMap<String, (u32, i32)>,
 }
 
 impl InteractionState {
@@ -125,6 +128,37 @@ impl InteractionState {
     let entry = self.scroll_offsets.entry(id.to_string()).or_insert(Vec2::ZERO);
     entry.x -= delta.x;
     entry.y -= delta.y;
+  }
+
+  /// Handle DatePicker navigation (prev/next month).
+  /// Returns true if an action was handled.
+  pub fn handle_datepicker_action(&mut self, action: &str) -> bool {
+      let mut id_val = None;
+      let mut is_next = false;
+      
+      if let Some(id) = action.strip_suffix(":prev") {
+          id_val = Some(id.to_string());
+      } else if let Some(id) = action.strip_suffix(":next") {
+          id_val = Some(id.to_string());
+          is_next = true;
+      }
+      
+      if let Some(id) = id_val {
+           let entry = self.calendar_view_state.entry(id).or_insert_with(|| {
+               let now = Local::now().naive_local().date();
+               (now.month(), now.year())
+           });
+           
+           let (mut m, mut y) = *entry;
+           if is_next {
+               if m == 12 { m = 1; y += 1; } else { m += 1; }
+           } else {
+               if m == 1 { m = 12; y -= 1; } else { m -= 1; }
+           }
+           *entry = (m, y);
+           return true; 
+      }
+      false
   }
 }
 

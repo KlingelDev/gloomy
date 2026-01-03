@@ -12,6 +12,7 @@ use std::fs;
 use std::path::Path;
 use winit::keyboard::{Key, NamedKey};
 use winit::event::ElementState;
+use chrono::{NaiveDate, Datelike};
 
 /// Loads a UI definition from a RON file.
 ///
@@ -55,6 +56,7 @@ pub struct RenderContext<'a> {
   pub overlay_queue: Vec<(Widget, Vec2)>, // Widget + Absolute Position
   pub data_provider: Option<&'a dyn crate::data_source::DataProvider>,
   pub widget_tracker: Option<&'a mut crate::widget_state::WidgetStateTracker>,
+  pub deferred_draws: Option<&'a mut Vec<Box<dyn FnOnce(&mut crate::renderer::GloomyRenderer, &wgpu::Device, &wgpu::Queue)>>>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -72,6 +74,7 @@ impl<'a> RenderContext<'a> {
     scale_factor: f32, // Added arg
     data_provider: Option<&'a dyn crate::data_source::DataProvider>,
     widget_tracker: Option<&'a mut crate::widget_state::WidgetStateTracker>,
+    deferred_draws: Option<&'a mut Vec<Box<dyn FnOnce(&mut crate::renderer::GloomyRenderer, &wgpu::Device, &wgpu::Queue)>>>,
   ) -> Self {
     Self {
       primitives,
@@ -90,6 +93,7 @@ impl<'a> RenderContext<'a> {
       overlay_queue: Vec::new(),
       data_provider,
       widget_tracker,
+      deferred_draws,
     }
   }
 
@@ -1023,58 +1027,76 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
              let dd_center = dd_pos + Vec2::new(dd_width * 0.5, dd_height * 0.5);
              let dd_half = Vec2::new(dd_width * 0.5, dd_height * 0.5);
 
-             // DD Background
-             let dd_bg = style.dropdown_background.unwrap_or((0.12, 0.12, 0.15, 1.0));
-             ctx.primitives.draw_rect(
-                 dd_center,
-                 dd_half,
-                 Vec4::new(dd_bg.0, dd_bg.1, dd_bg.2, dd_bg.3),
-                 [2.0; 4], 0.0
-             );
-             
-             // DD Border
-             if let Some(b) = &style.dropdown_border {
-                 ctx.primitives.draw_rect(
-                     dd_center,
-                     dd_half,
-                     Vec4::new(b.color.0, b.color.1, b.color.2, b.color.3),
-                     [2.0; 4], b.width
-                 );
-             }
+             // Clone data for closure
+             let style = style.clone();
+             let suggestions = suggestions.clone();
+             let id = id.clone();
+             let hovered_action = ctx.interaction.as_ref().and_then(|s| s.hovered_action.clone());
 
-             // Items
-             for (i, item) in suggestions.iter().take(count).enumerate() {
-                 let item_y = dd_pos.y + i as f32 * item_height;
-                 let item_center = Vec2::new(dd_pos.x + dd_width * 0.5, item_y + item_height * 0.5);
-                 let item_half = Vec2::new(dd_width * 0.5, item_height * 0.5);
-                 
-                 // Hover check
-                 let action_id = format!("{}:opt:{}", id, i);
-                 let is_hovered = ctx.interaction.map(|s| s.hovered_action.as_deref() == Some(&action_id)).unwrap_or(false);
-                 
-                 if is_hovered {
-                     let hl = style.dropdown_highlight_color;
-                     ctx.primitives.draw_rect(
-                         item_center,
-                         item_half,
-                         Vec4::new(hl.0, hl.1, hl.2, hl.3),
-                         [1.0; 4], 0.0
-                     );
-                 }
-                 
-                 // Item Text
-                 let tc = style.dropdown_text_color;
-                 let item_text_pos = Vec2::new(dd_pos.x + 8.0, item_y + 4.0); // Simple centering? 24 height -> 14 text -> 5px padding
-                 ctx.text.draw(
-                     ctx.device,
-                     ctx.queue,
-                     item,
-                     item_text_pos,
-                     14.0,
-                     Vec4::new(tc.0, tc.1, tc.2, tc.3),
-                     HorizontalAlign::Left,
-                     style.font.as_deref()
-                 );
+             let draw_dropdown = move |renderer: &mut crate::renderer::GloomyRenderer, _device: &wgpu::Device, _queue: &wgpu::Queue| {
+                  // Use overlay renderers for Z-order correctness
+                  let (primitives, text) = renderer.split_overlay_mut();
+                  
+                  // DD Background
+                  let dd_bg = style.dropdown_background.unwrap_or((0.12, 0.12, 0.15, 1.0));
+                  primitives.draw_rect(
+                      dd_center,
+                      dd_half,
+                      Vec4::new(dd_bg.0, dd_bg.1, dd_bg.2, dd_bg.3),
+                      [2.0; 4], 0.0
+                  );
+                  
+                  // DD Border
+                  if let Some(b) = &style.dropdown_border {
+                       primitives.draw_rect(
+                           dd_center,
+                           dd_half,
+                           Vec4::new(b.color.0, b.color.1, b.color.2, b.color.3),
+                           [2.0; 4], b.width
+                       );
+                  }
+
+                  // Items
+                  for (i, item) in suggestions.iter().take(count).enumerate() {
+                      let item_y = dd_pos.y + i as f32 * item_height;
+                      let item_center = Vec2::new(dd_pos.x + dd_width * 0.5, item_y + item_height * 0.5);
+                      let item_half = Vec2::new(dd_width * 0.5, item_height * 0.5);
+                      
+                      // Hover check
+                      let action_id = format!("{}:opt:{}", id, i);
+                      let is_hovered = hovered_action.as_deref() == Some(&action_id);
+                      
+                      if is_hovered {
+                          let hl = style.dropdown_highlight_color;
+                          primitives.draw_rect(
+                              item_center,
+                              item_half,
+                              Vec4::new(hl.0, hl.1, hl.2, hl.3),
+                              [1.0; 4], 0.0
+                          );
+                      }
+                      
+                      // Item Text
+                      let tc = style.dropdown_text_color;
+                      let item_text_pos = Vec2::new(dd_pos.x + 8.0, item_y + 4.0); 
+                      text.draw(
+                          _device,
+                          _queue,
+                          item,
+                          item_text_pos,
+                          14.0,
+                          Vec4::new(tc.0, tc.1, tc.2, tc.3),
+                          HorizontalAlign::Left,
+                          style.font.as_deref()
+                      );
+                  }
+             };
+
+             if let Some(queue) = &mut ctx.deferred_draws {
+                 queue.push(Box::new(draw_dropdown));
+             } else {
+                 // Fallback if no deferred queue available (e.g. tests)
+                 // Just skip or log? For now skip to be safe.
              }
         }
     }
@@ -1521,6 +1543,176 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
        }
     }
 
+    Widget::DatePicker { 
+        id, value, placeholder, format, style, bounds, min_date, max_date, .. 
+    } => {
+        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+        let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+
+        let is_focused = ctx.interaction.as_ref().map(|s| s.focused_id.as_deref() == Some(id)).unwrap_or(false);
+        
+        // Draw Input Background
+        let bg_color = if is_focused { style.background_focused } else { style.background }.unwrap_or_default();
+        let border = if is_focused { style.border_focused } else { style.border };
+
+        if bg_color.3 > 0.0 {
+            ctx.primitives.draw_rect(center, half_size, Vec4::from(bg_color), [style.corner_radius; 4], 0.0);
+        }
+        // Note: Border drawing skipped - draw_border not implemented
+
+        // Draw Text
+        let text_str = if let Some(date) = value {
+             date.format(format).to_string()
+        } else {
+             placeholder.clone()
+        };
+        
+        let text_color = if value.is_some() { style.text_color } else { style.placeholder_color };
+        
+        // Add padding
+        let text_pos = Vec2::new(pos.x + 8.0, center.y);
+        
+        ctx.text.draw(
+            ctx.device,
+            ctx.queue,
+            &text_str,
+            text_pos,
+            16.0, 
+            Vec4::from(text_color),
+            HorizontalAlign::Left,
+            style.font.as_deref()
+        );
+
+        // Draw Overlay (Deferred)
+        if is_focused {
+             let bounds = *bounds;
+             let style = style.clone();
+             let id = id.clone();
+             let value = *value;
+             let min_date = *min_date;
+             let max_date = *max_date;
+             let offset = ctx.offset;
+             
+             let view_state = ctx.interaction.and_then(|s| s.calendar_view_state.get(&id).copied());
+             let hovered_action = ctx.interaction.and_then(|s| s.hovered_action.clone());
+             
+             if let Some(deferred) = ctx.deferred_draws.as_mut() {
+                 deferred.push(Box::new(move |renderer, device, queue| {
+                     // Get Overlay Renderer
+                     let (primitives, text) = renderer.split_overlay_mut();
+                     
+                     let dd_width = bounds.width.max(250.0);
+                     let dd_x = offset.x + bounds.x;
+                     let dd_y = offset.y + bounds.y + bounds.height + 2.0;
+
+                     let header_height = 30.0;
+                     let day_names_height = 28.0;
+                     let row_height = 30.0;
+                     let padding = 5.0;
+                     let dd_height = header_height + day_names_height + 6.0 * row_height + padding * 2.0;
+                     
+                     let dd_center = Vec2::new(dd_x + dd_width * 0.5, dd_y + dd_height * 0.5);
+                     let dd_half = Vec2::new(dd_width * 0.5, dd_height * 0.5);
+                     
+                     // Background
+                     if let Some(bg) = style.calendar_background {
+                         primitives.draw_rect(dd_center, dd_half, Vec4::from(bg), [style.corner_radius; 4], 0.0);
+                     }
+                     // Note: Border drawing skipped - draw_border not implemented
+                     
+                     // Determine View Date
+                     let (view_month, view_year) = view_state
+                         .or_else(|| value.map(|d| (d.month(), d.year())))
+                         .unwrap_or_else(|| {
+                             let now = chrono::Local::now().naive_local().date();
+                             (now.month(), now.year())
+                         });
+
+                     // Draw Header
+                     let header_y = dd_y + padding + header_height * 0.5;
+                     
+                     // Prev Button (<)
+                     let prev_hover = hovered_action.as_deref() == Some(&format!("{}:prev", id));
+                     let prev_color = if prev_hover { style.day_hover_color } else { style.month_header_color };
+                     text.draw(device, queue, "<", Vec2::new(dd_x + 20.0, header_y), 20.0, Vec4::from(prev_color), HorizontalAlign::Center, None);
+
+                     // Next Button (>)
+                     let next_hover = hovered_action.as_deref() == Some(&format!("{}:next", id));
+                     let next_color = if next_hover { style.day_hover_color } else { style.month_header_color };
+                     text.draw(device, queue, ">", Vec2::new(dd_x + dd_width - 20.0, header_y), 20.0, Vec4::from(next_color), HorizontalAlign::Center, None);
+
+                     // Month Year Text
+                     let header_str = format!("{} {}", chrono::Month::try_from(view_month as u8).map(|m| m.name()).unwrap_or(""), view_year);
+                     text.draw(device, queue, &header_str, Vec2::new(dd_x + dd_width * 0.5, header_y), 18.0, Vec4::from(style.month_header_color), HorizontalAlign::Center, None);
+                     
+                     // Day Names
+                     let days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+                     let day_names_y = dd_y + padding + header_height + day_names_height * 0.5;
+                     let cell_w = (dd_width - padding * 2.0) / 7.0;
+                     
+                     for (i, day) in days.iter().enumerate() {
+                         let cx = dd_x + padding + cell_w * i as f32 + cell_w * 0.5;
+                         text.draw(device, queue, day, Vec2::new(cx, day_names_y), 14.0, Vec4::from(style.month_header_color), HorizontalAlign::Center, None);
+                     }
+                     
+                     // Grid
+                     let grid_start_y = dd_y + padding + header_height + day_names_height;
+                     
+                     if let Some(first_day) = NaiveDate::from_ymd_opt(view_year, view_month, 1) {
+                         let start_weekday = first_day.weekday().num_days_from_monday(); // 0=Mon
+                         let offset = start_weekday as i64;
+                         
+                         for row in 0..6 {
+                             for col in 0..7 {
+                                 let day_idx = (row * 7 + col) as i64;
+                                 let date_offset = day_idx - offset;
+                                 
+                                 if let Some(date) = first_day.checked_add_signed(chrono::Duration::days(date_offset)) {
+                                     let is_current_month = date.month() == view_month;
+                                     let is_selected = value == Some(date);
+                                     let is_today = date == chrono::Local::now().naive_local().date();
+                                     let action_id = format!("{}:day:{}", id, date.format("%Y-%m-%d"));
+                                     let is_hovered = hovered_action.as_ref() == Some(&action_id);
+                                     
+                                     let cx = dd_x + padding + cell_w * col as f32 + cell_w * 0.5;
+                                     let cy = grid_start_y + row_height * row as f32 + row_height * 0.5;
+                                     
+                                     // Draw Cell Background
+                                     if is_selected {
+                                         primitives.draw_rect(Vec2::new(cx, cy), Vec2::new(cell_w * 0.45, row_height * 0.45), Vec4::from(style.selected_day_color), [4.0; 4], 0.0);
+                                     } else if is_hovered {
+                                         primitives.draw_rect(Vec2::new(cx, cy), Vec2::new(cell_w * 0.45, row_height * 0.45), Vec4::from(style.day_hover_color), [4.0; 4], 0.0);
+                                     }
+                                     
+                                     // Draw Text
+                                     let mut color = if is_selected {
+                                         Vec4::ONE // White on selection
+                                     } else if is_today && is_current_month {
+                                         Vec4::from(style.today_color)
+                                     } else if !is_current_month {
+                                         Vec4::new(0.5, 0.5, 0.5, 1.0) // Gray
+                                     } else {
+                                         Vec4::from(style.day_text_color)
+                                     };
+                                     
+                                     // Check min/max bounds
+                                     if let Some(min) = min_date { if date < min { color.w = 0.3; } }
+                                     if let Some(max) = max_date { if date > max { color.w = 0.3; } }
+
+                                     // Offset y by half font size to vertically center
+                                     let font_size = 16.0;
+                                     let text_y = cy - font_size * 0.5;
+                                     text.draw(device, queue, &date.day().to_string(), Vec2::new(cx, text_y), font_size, color, HorizontalAlign::Center, None);
+                                 }
+                             }
+                         }
+                     }
+                 }));
+             }
+        }
+    }
+
     Widget::Checkbox { checked, style, bounds, size, .. } => {
         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
         let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
@@ -1669,7 +1861,13 @@ pub fn render_ui(
   interaction: Option<&InteractionState>,
   data_provider: Option<&dyn crate::data_source::DataProvider>,
 ) {
-    render_ui_with_state(widget, renderer, device, queue, interaction, data_provider, None);
+    let mut deferred_draws = Vec::new();
+    render_ui_with_state(widget, renderer, device, queue, interaction, data_provider, None, &mut deferred_draws);
+    
+    // Execute deferred draws (overlays like dropdowns)
+    for draw_op in deferred_draws {
+        draw_op(renderer, device, queue);
+    }
 }
 
 /// Renders a widget with optional state tracking for performance.
@@ -1681,6 +1879,7 @@ pub fn render_ui_with_state(
   interaction: Option<&InteractionState>,
   data_provider: Option<&dyn crate::data_source::DataProvider>,
   widget_tracker: Option<&mut crate::widget_state::WidgetStateTracker>,
+  deferred_draws: &mut Vec<Box<dyn FnOnce(&mut crate::renderer::GloomyRenderer, &wgpu::Device, &wgpu::Queue)>>,
 ) {
   let size = renderer.size();
   let surface_width = size.x as u32;
@@ -1701,7 +1900,8 @@ pub fn render_ui_with_state(
       surface_height, 
       scale_factor, // Use local variable
       data_provider, 
-      widget_tracker
+      widget_tracker,
+      Some(deferred_draws)
   );
   render_widget(widget, &mut ctx);
 }
@@ -1809,6 +2009,78 @@ pub fn hit_test<'a>(
                         }
                  }
              }
+        }
+        
+        if hit_input {
+             Some(HitTestResult { widget, action: id.clone() })
+        } else {
+             None
+        }
+    }
+    Widget::DatePicker {
+        id, value, bounds, ..
+    } => {
+        let hit_input = point.x >= bounds.x && point.x <= bounds.x + bounds.width
+            && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
+
+        if let Some(state) = interaction {
+            if state.focused_id.as_deref() == Some(id) {
+                let dd_width = bounds.width.max(250.0);
+                let dd_x = bounds.x;
+                // Layout constants matching render logic
+                let header_height = 30.0;
+                let day_names_height = 28.0;
+                let row_height = 30.0;
+                let padding = 5.0;
+                let dd_height = header_height + day_names_height + 6.0 * row_height + padding * 2.0;
+
+                let dd_y = bounds.y + bounds.height + 2.0;
+
+                if point.x >= dd_x && point.x <= dd_x + dd_width 
+                   && point.y >= dd_y && point.y <= dd_y + dd_height {
+                    
+                    let local_x = point.x - dd_x;
+                    let local_y = point.y - dd_y;
+
+                    // Header
+                    if local_y <= header_height {
+                         if local_x < 40.0 { return Some(HitTestResult { widget, action: format!("{}:prev", id) }); }
+                         if local_x > dd_width - 40.0 { return Some(HitTestResult { widget, action: format!("{}:next", id) }); }
+                         return Some(HitTestResult { widget, action: id.clone() }); 
+                    }
+
+                    // Grid
+                    if local_y > header_height + day_names_height {
+                        let grid_y = local_y - (header_height + day_names_height);
+                        let row = (grid_y / row_height) as i32;
+                        let cell_w = (dd_width - padding * 2.0) / 7.0;
+                        let col = ((local_x - padding) / cell_w) as i32;
+                        
+                        if row >= 0 && row < 6 && col >= 0 && col < 7 {
+                            // Determine View Date
+                            let (view_month, view_year) = state.calendar_view_state.get(id)
+                                .copied()
+                                .or_else(|| value.map(|d| (d.month(), d.year())))
+                                .unwrap_or_else(|| {
+                                    let now = chrono::Local::now().naive_local().date();
+                                    (now.month(), now.year())
+                                });
+                            
+                            if let Some(first_day) = NaiveDate::from_ymd_opt(view_year, view_month, 1) {
+                                let start_weekday = first_day.weekday().num_days_from_monday(); // 0=Mon
+                                let offset = start_weekday as i64;
+                                let day_idx = (row * 7 + col) as i64;
+                                let date_offset = day_idx - offset;
+                                
+                                if let Some(date) = first_day.checked_add_signed(chrono::Duration::days(date_offset)) {
+                                     return Some(HitTestResult { widget, action: format!("{}:day:{}", id, date.format("%Y-%m-%d")) });
+                                }
+                            }
+                        }
+                    }
+                    return Some(HitTestResult { widget, action: id.clone() });
+                }
+            }
         }
         
         if hit_input {
@@ -1979,7 +2251,11 @@ pub fn find_widget_mut<'a>(root: &'a mut Widget, id: &str) -> Option<&'a mut Wid
         Widget::TextInput { id: w_id, .. } 
         | Widget::Button { action: w_id, .. } 
         | Widget::Checkbox { id: w_id, .. } 
-        | Widget::Slider { id: w_id, .. } => {
+        | Widget::Slider { id: w_id, .. } 
+        | Widget::NumberInput { id: w_id, .. }
+        | Widget::Autocomplete { id: w_id, .. }
+        | Widget::DatePicker { id: w_id, .. }
+        | Widget::ToggleSwitch { id: w_id, .. } => {
             if w_id == id {
                 return Some(root);
             }

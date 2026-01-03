@@ -35,6 +35,7 @@ env_logger = "0.10"
 anyhow = "1.0"
 winit.workspace = true
 image = "0.25.9"
+chrono = "0.4.42"
 
 [[example]]
 name = "hello_gloomy"
@@ -59,3 +60,7 @@ path = "examples/scroll_ui.rs"
 [[example]]
 name = "style_ui"
 path = "examples/style_ui.rs"
+
+[[example]]
+name = "datepicker_demo"
+path = "examples/datepicker_demo.rs"
