@@ -48,7 +48,7 @@ fn main() -> anyhow::Result<()> {
              
              // For this example, let's implement hit test handling here.
              use gloomy_core::ui::hit_test;
-             let hit_action = hit_test(&s.ui, s.interaction.mouse_pos, Some(&s.interaction.scroll_offsets)).map(|h| h.action.to_string());
+             let hit_action = hit_test(&s.ui, s.interaction.mouse_pos, Some(&s.interaction)).map(|h| h.action.to_string());
 
              if let Some(action) = hit_action {
                  println!("Clicked: {}", action);
@@ -101,7 +101,7 @@ fn main() -> anyhow::Result<()> {
       
       // Hit test update for hover
       use gloomy_core::ui::hit_test;
-      if let Some(hit) = hit_test(&s.ui, s.interaction.mouse_pos, Some(&s.interaction.scroll_offsets)) {
+      if let Some(hit) = hit_test(&s.ui, s.interaction.mouse_pos, Some(&s.interaction)) {
           s.interaction.hovered_action = Some(hit.action.to_string());
       } else {
           s.interaction.hovered_action = None;

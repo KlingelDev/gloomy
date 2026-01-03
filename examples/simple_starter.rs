@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
             s.interaction.update_mouse(pos);
             
             let scroll_offsets = s.interaction.scroll_offsets.clone();
-            if let Some(res) = hit_test(&s.ui_root, pos, Some(&scroll_offsets)) {
+            if let Some(res) = hit_test(&s.ui_root, pos, Some(&s.interaction)) {
                 s.interaction.hovered_action = Some(res.action.to_string());
             } else {
                 s.interaction.hovered_action = None;
@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
                 let mouse_pos = s.interaction.mouse_pos;
                 let scroll_offsets = s.interaction.scroll_offsets.clone();
                 
-                if let Some(res) = hit_test(&s.ui_root, mouse_pos, Some(&scroll_offsets)) {
+                if let Some(res) = hit_test(&s.ui_root, mouse_pos, Some(&s.interaction)) {
                     let action = res.action.to_string();
                     s.interaction.set_active(Some(action.clone()));
                 }

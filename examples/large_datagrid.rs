@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
             s.interaction.update_mouse(pos);
             
             // Hit Test
-            let hit_action = hit_test(&s.ui_root, pos, Some(&s.interaction.scroll_offsets))
+            let hit_action = hit_test(&s.ui_root, pos, Some(&s.interaction))
                 .map(|h| h.action.clone());
                 
             let cursor = if let Some(ref action) = hit_action {

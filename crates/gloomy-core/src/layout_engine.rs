@@ -453,6 +453,8 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::Button { flex, .. } => *flex,
     Widget::Label { flex, .. } => *flex,
     Widget::TextInput { flex, .. } => *flex,
+    Widget::NumberInput { flex, .. } => *flex,
+    Widget::Autocomplete { flex, .. } => *flex,
     Widget::Spacer { .. } => 0.0,
     Widget::Divider { .. } => 0.0,
     Widget::Scrollbar { .. } => 0.0,
@@ -554,6 +556,16 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         let h = if *height > 0.0 { *height } else { 32.0 };
         (w, h)
     },
+    Widget::NumberInput { width, height, .. } => {
+        let w = if *width > 0.0 { *width } else { 120.0 };
+        let h = if *height > 0.0 { *height } else { 32.0 };
+        (w, h)
+    },
+    Widget::Autocomplete { width, height, .. } => {
+        let w = if *width > 0.0 { *width } else { 150.0 };
+        let h = if *height > 0.0 { *height } else { 32.0 };
+        (w, h)
+    },
     Widget::Spacer { size, .. } => (*size, *size),
     Widget::Divider { orientation, thickness, margin, .. } => {
       match orientation {
@@ -624,6 +636,14 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
         *lh = h;
     }
     Widget::TextInput { bounds, .. } => {
+      bounds.width = w;
+      bounds.height = h;
+    }
+    Widget::NumberInput { bounds, .. } => {
+      bounds.width = w;
+      bounds.height = h;
+    }
+    Widget::Autocomplete { bounds, .. } => {
       bounds.width = w;
       bounds.height = h;
     }
@@ -717,6 +737,14 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
       bounds.x = x;
       bounds.y = y;
     }
+    Widget::NumberInput { bounds, .. } => {
+      bounds.x = x;
+      bounds.y = y;
+    }
+    Widget::Autocomplete { bounds, .. } => {
+      bounds.x = x;
+      bounds.y = y;
+    }
     Widget::Spacer { .. } => {}
     Widget::Divider { bounds, .. } => {
       bounds.x = x;
@@ -768,6 +796,8 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::Button { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Label { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::TextInput { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::NumberInput { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Autocomplete { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Spacer { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Divider { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Scrollbar { grid_col, .. } => grid_col.unwrap_or(0),
@@ -793,6 +823,8 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::Button { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Label { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::TextInput { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::NumberInput { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::Autocomplete { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Spacer { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Divider { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Scrollbar { grid_row, .. } => grid_row.unwrap_or(0),
@@ -815,6 +847,8 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::Button { grid_col, .. } => *grid_col,
     Widget::Label { grid_col, .. } => *grid_col,
     Widget::TextInput { grid_col, .. } => *grid_col,
+    Widget::NumberInput { grid_col, .. } => *grid_col,
+    Widget::Autocomplete { grid_col, .. } => *grid_col,
     Widget::Spacer { grid_col, .. } => *grid_col,
     Widget::Divider { grid_col, .. } => *grid_col,
     Widget::Scrollbar { grid_col, .. } => *grid_col,
@@ -840,6 +874,8 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::Button { grid_row, .. } => *grid_row,
     Widget::Label { grid_row, .. } => *grid_row,
     Widget::TextInput { grid_row, .. } => *grid_row,
+    Widget::NumberInput { grid_row, .. } => *grid_row,
+    Widget::Autocomplete { grid_row, .. } => *grid_row,
     Widget::Spacer { grid_row, .. } => *grid_row,
     Widget::Divider { grid_row, .. } => *grid_row,
     Widget::Scrollbar { grid_row, .. } => *grid_row,
@@ -863,6 +899,8 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::Button { col_span, .. } => *col_span,
     Widget::Label { col_span, .. } => *col_span,
     Widget::TextInput { col_span, .. } => *col_span,
+    Widget::NumberInput { col_span, .. } => *col_span,
+    Widget::Autocomplete { col_span, .. } => *col_span,
     Widget::Spacer { col_span, .. } => *col_span,
     Widget::Divider { col_span, .. } => *col_span,
     Widget::Scrollbar { col_span, .. } => *col_span,
@@ -885,6 +923,8 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::Icon { row_span, .. } => *row_span,
     Widget::Label { row_span, .. } => *row_span,
     Widget::TextInput { row_span, .. } => *row_span,
+    Widget::NumberInput { row_span, .. } => *row_span,
+    Widget::Autocomplete { row_span, .. } => *row_span,
     Widget::Spacer { row_span, .. } => *row_span,
     Widget::Divider { row_span, .. } => *row_span,
     Widget::Scrollbar { row_span, .. } => *row_span,

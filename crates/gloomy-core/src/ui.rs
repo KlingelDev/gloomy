@@ -726,6 +726,13 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         ctx.primitives.draw_rect(center, half_size, Vec4::new(bg_color.0, bg_color.1, bg_color.2, bg_color.3), [4.0; 4], 0.0);
         
         // Border
+        let has_error = ctx.interaction.as_ref()
+           .and_then(|i| i.validation_errors.get(id))
+           .map(|e| !e.is_empty())
+           .unwrap_or(false);
+           
+        let error_border_color = (1.0, 0.2, 0.2, 1.0);
+
         let border = if is_focused {
             style.border_focused.as_ref().or(style.border.as_ref())
         } else {
@@ -733,10 +740,15 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         };
         
         if let Some(b) = border {
-             ctx.primitives.draw_rect(center, half_size, Vec4::new(b.color.0, b.color.1, b.color.2, b.color.3), [4.0; 4], b.width);
+             let color = if has_error { error_border_color } else { b.color };
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(color.0, color.1, color.2, color.3), [4.0; 4], b.width);
         } else if is_focused && style.border_focused.is_none() {
              // Default focus border if none specified
-             ctx.primitives.draw_rect(center, half_size, Vec4::new(0.75, 0.75, 0.75, 1.0), [4.0; 4], 1.5);
+             let color = if has_error { error_border_color } else { (0.75, 0.75, 0.75, 1.0) };
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(color.0, color.1, color.2, color.3), [4.0; 4], 1.5);
+        } else if has_error {
+             // Default error border if no border specified
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(error_border_color.0, error_border_color.1, error_border_color.2, error_border_color.3), [4.0; 4], 1.5);
         }
 
         let text = if value.is_empty() { placeholder } else { value };
@@ -769,6 +781,304 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         }
     }
 
+    Widget::Spacer { .. } => {}
+    Widget::NumberInput {
+        id,
+        value,
+        min: _,
+        max: _,
+        step: _,
+        precision,
+        show_spinner,
+        bounds,
+        style,
+        ..
+    } => {
+        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+        let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+
+        let is_focused = ctx.interaction.map(|s| s.focused_id.as_deref() == Some(id)).unwrap_or(false);
+        
+        // Background
+        let bg_color = if is_focused {
+             style.background_focused.unwrap_or(style.background.unwrap_or((0.15, 0.15, 0.18, 1.0)))
+        } else {
+             style.background.unwrap_or((0.1, 0.1, 0.12, 1.0))
+        };
+        ctx.primitives.draw_rect(center, half_size, Vec4::new(bg_color.0, bg_color.1, bg_color.2, bg_color.3), [style.corner_radius; 4], 0.0);
+        
+        // Border
+        let has_error = ctx.interaction.as_ref()
+           .and_then(|i| i.validation_errors.get(id))
+           .map(|e| !e.is_empty())
+           .unwrap_or(false);
+
+        let border = if is_focused {
+            style.border_focused.as_ref().or(style.border.as_ref())
+        } else {
+            style.border.as_ref()
+        };
+        
+        let error_border_color = (1.0, 0.2, 0.2, 1.0);
+        
+        if let Some(b) = border {
+             let color = if has_error { error_border_color } else { b.color };
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(color.0, color.1, color.2, color.3), [style.corner_radius; 4], b.width);
+        } else if has_error {
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(error_border_color.0, error_border_color.1, error_border_color.2, error_border_color.3), [style.corner_radius; 4], 1.5);
+        }
+
+        // Calculate layout
+        let spinner_width = if *show_spinner { 20.0 } else { 0.0 };
+        let text_area_width = bounds.width - spinner_width - 8.0; // 8px padding
+
+        // Value Formatting
+        let text = format!("{:.1$}", value, precision);
+        let col = Vec4::new(style.text_color.0, style.text_color.1, style.text_color.2, style.text_color.3);
+        let size = 14.0; // Default font size for now
+        
+        // Text Rendering
+        let text_dims = ctx.text.measure(&text, size, style.font.as_deref());
+        let text_y = (bounds.height - text_dims.y) * 0.5;
+        let text_pos = pos + Vec2::new(8.0, text_y);
+
+        // Clip text if it exceeds area? For now just draw.
+        // Helper to clip would be nice, but let's assume it fits or simple scrolling later.
+        
+        ctx.text.draw(ctx.device, ctx.queue, &text, text_pos, size, col, HorizontalAlign::Left, style.font.as_deref());
+        
+        // Draw cursor if focused (end of text)
+        if is_focused {
+             let cursor_x = 8.0 + text_dims.x + 1.0;
+             let cursor_pos = pos + Vec2::new(cursor_x, bounds.height * 0.5);
+             ctx.primitives.draw_rect(
+                 cursor_pos, 
+                 Vec2::new(1.0, size * 0.8 * 0.5), 
+                 Vec4::new(0.8, 0.8, 0.8, 1.0), 
+                 [0.0; 4], 
+                 0.0
+             );
+        }
+
+        // Spinners
+        if *show_spinner {
+             let spinner_x = pos.x + bounds.width - spinner_width;
+             let btn_h = bounds.height * 0.5;
+             
+             // Top Button (Increment)
+             let top_center = Vec2::new(spinner_x + spinner_width * 0.5, pos.y + btn_h * 0.5);
+             ctx.primitives.draw_rect(
+                 top_center,
+                 Vec2::new(spinner_width * 0.5 - 1.0, btn_h * 0.5 - 1.0),
+                 Vec4::new(style.spinner_color.0, style.spinner_color.1, style.spinner_color.2, style.spinner_color.3),
+                 [0.0, style.corner_radius, 0.0, 0.0], // Top right radius
+                 0.0
+             );
+
+             // Bottom Button (Decrement)
+             let bot_center = Vec2::new(spinner_x + spinner_width * 0.5, pos.y + btn_h * 1.5);
+             ctx.primitives.draw_rect(
+                 bot_center,
+                 Vec2::new(spinner_width * 0.5 - 1.0, btn_h * 0.5 - 1.0),
+                 Vec4::new(style.spinner_color.0, style.spinner_color.1, style.spinner_color.2, style.spinner_color.3),
+                 [0.0, 0.0, style.corner_radius, 0.0], // Bottom right radius
+                 0.0
+             );
+
+             // Simple arrow icons using lines
+             let arrow_col = Vec4::new(0.8, 0.8, 0.8, 1.0);
+             
+             // Up Arrow
+             let up_cy = top_center.y;
+             let up_cx = top_center.x;
+             ctx.primitives.draw_line(
+                 Vec2::new(up_cx - 3.0, up_cy + 2.0),
+                 Vec2::new(up_cx, up_cy - 1.0),
+                 1.5,
+                 arrow_col
+             );
+             ctx.primitives.draw_line(
+                 Vec2::new(up_cx, up_cy - 1.0),
+                 Vec2::new(up_cx + 3.0, up_cy + 2.0),
+                 1.5,
+                 arrow_col
+             );
+
+             // Down Arrow
+             let dn_cy = bot_center.y;
+             let dn_cx = bot_center.x;
+             ctx.primitives.draw_line(
+                 Vec2::new(dn_cx - 3.0, dn_cy - 2.0),
+                 Vec2::new(dn_cx, dn_cy + 1.0),
+                 1.5,
+                 arrow_col
+             );
+             ctx.primitives.draw_line(
+                 Vec2::new(dn_cx, dn_cy + 1.0),
+                 Vec2::new(dn_cx + 3.0, dn_cy - 2.0),
+                 1.5,
+                 arrow_col
+             );
+        }
+    }
+    Widget::Autocomplete {
+        id,
+        value,
+        placeholder,
+        suggestions,
+        max_visible,
+        bounds,
+        style,
+        ..
+    } => {
+        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+        let half_size = Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+        
+        let is_focused = ctx.interaction.map(|s| s.focused_id.as_deref() == Some(id)).unwrap_or(false);
+        
+        // Background
+        let input_bg = if is_focused {
+             style.background_focused.unwrap_or(style.background.unwrap_or((0.15, 0.15, 0.18, 1.0)))
+        } else {
+             style.background.unwrap_or((0.1, 0.1, 0.12, 1.0))
+        };
+        ctx.primitives.draw_rect(center, half_size, Vec4::new(input_bg.0, input_bg.1, input_bg.2, input_bg.3), [style.corner_radius; 4], 0.0);
+        
+        // Validation Error
+        let has_error = ctx.interaction.as_ref()
+           .and_then(|i| i.validation_errors.get(id))
+           .map(|e| !e.is_empty())
+           .unwrap_or(false);
+           
+        // Border
+        let border = if is_focused {
+            style.border_focused.as_ref().or(style.border.as_ref())
+        } else {
+            style.border.as_ref()
+        };
+        
+        let error_border_color = (1.0, 0.2, 0.2, 1.0);
+        
+        if let Some(b) = border {
+             let color = if has_error { error_border_color } else { b.color };
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(color.0, color.1, color.2, color.3), [style.corner_radius; 4], b.width);
+        } else if has_error {
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(error_border_color.0, error_border_color.1, error_border_color.2, error_border_color.3), [style.corner_radius; 4], 1.5);
+        } else if is_focused && style.border_focused.is_none() {
+             ctx.primitives.draw_rect(center, half_size, Vec4::new(0.75, 0.75, 0.75, 1.0), [style.corner_radius; 4], 1.5);
+        }
+
+        // Text
+        let text_val = if value.is_empty() { placeholder } else { value };
+        let col = if value.is_empty() { Vec4::new(0.5, 0.5, 0.6, 1.0) } else { Vec4::new(style.text_color.0, style.text_color.1, style.text_color.2, style.text_color.3) };
+        let size = 14.0;
+        
+        let text_dims = ctx.text.measure(text_val, size, style.font.as_deref());
+        let text_y = (bounds.height - text_dims.y) * 0.5;
+        let text_pos = pos + Vec2::new(8.0, text_y);
+        
+        ctx.text.draw(
+            ctx.device,
+            ctx.queue,
+            text_val,
+            text_pos,
+            size,
+            col,
+            HorizontalAlign::Left,
+            style.font.as_deref()
+        );
+        
+        // Cursor
+        if is_focused {
+            let cursor_x = if value.is_empty() {
+                text_pos.x
+            } else {
+                text_pos.x + ctx.text.measure(value, size, style.font.as_deref()).x
+            };
+            
+            // Simple Blink
+            let time = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();
+            if (time / 500) % 2 == 0 {
+                let cc = style.cursor_color;
+                 ctx.primitives.draw_line(
+                     Vec2::new(cursor_x, text_pos.y),
+                     Vec2::new(cursor_x, text_pos.y + text_dims.y),
+                     1.5,
+                     Vec4::new(cc.0, cc.1, cc.2, cc.3)
+                 );
+            }
+        }
+        
+        // Dropdown
+        if is_focused && !suggestions.is_empty() {
+             let item_height = 24.0;
+             let count = suggestions.len().min(*max_visible);
+             let dd_height = count as f32 * item_height;
+             let dd_width = bounds.width;
+             
+             // Position dropdown below input
+             let dd_pos = pos + Vec2::new(0.0, bounds.height + 2.0); 
+             let dd_center = dd_pos + Vec2::new(dd_width * 0.5, dd_height * 0.5);
+             let dd_half = Vec2::new(dd_width * 0.5, dd_height * 0.5);
+
+             // DD Background
+             let dd_bg = style.dropdown_background.unwrap_or((0.12, 0.12, 0.15, 1.0));
+             ctx.primitives.draw_rect(
+                 dd_center,
+                 dd_half,
+                 Vec4::new(dd_bg.0, dd_bg.1, dd_bg.2, dd_bg.3),
+                 [2.0; 4], 0.0
+             );
+             
+             // DD Border
+             if let Some(b) = &style.dropdown_border {
+                 ctx.primitives.draw_rect(
+                     dd_center,
+                     dd_half,
+                     Vec4::new(b.color.0, b.color.1, b.color.2, b.color.3),
+                     [2.0; 4], b.width
+                 );
+             }
+
+             // Items
+             for (i, item) in suggestions.iter().take(count).enumerate() {
+                 let item_y = dd_pos.y + i as f32 * item_height;
+                 let item_center = Vec2::new(dd_pos.x + dd_width * 0.5, item_y + item_height * 0.5);
+                 let item_half = Vec2::new(dd_width * 0.5, item_height * 0.5);
+                 
+                 // Hover check
+                 let action_id = format!("{}:opt:{}", id, i);
+                 let is_hovered = ctx.interaction.map(|s| s.hovered_action.as_deref() == Some(&action_id)).unwrap_or(false);
+                 
+                 if is_hovered {
+                     let hl = style.dropdown_highlight_color;
+                     ctx.primitives.draw_rect(
+                         item_center,
+                         item_half,
+                         Vec4::new(hl.0, hl.1, hl.2, hl.3),
+                         [1.0; 4], 0.0
+                     );
+                 }
+                 
+                 // Item Text
+                 let tc = style.dropdown_text_color;
+                 let item_text_pos = Vec2::new(dd_pos.x + 8.0, item_y + 4.0); // Simple centering? 24 height -> 14 text -> 5px padding
+                 ctx.text.draw(
+                     ctx.device,
+                     ctx.queue,
+                     item,
+                     item_text_pos,
+                     14.0,
+                     Vec4::new(tc.0, tc.1, tc.2, tc.3),
+                     HorizontalAlign::Left,
+                     style.font.as_deref()
+                 );
+             }
+        }
+    }
+    
     Widget::Spacer { .. } => {}
     Widget::Divider { bounds, orientation, thickness, color, margin, .. } => {
       use crate::widget::Orientation;
@@ -1402,7 +1712,7 @@ pub fn render_ui_with_state(
 pub fn hit_test<'a>(
   widget: &'a Widget,
   point: Vec2,
-  scroll_offsets: Option<&std::collections::HashMap<String, Vec2>>,
+  interaction: Option<&InteractionState>,
 ) -> Option<HitTestResult<'a>> {
   match widget {
     Widget::Container { id, scrollable, bounds, children, .. } => {
@@ -1419,9 +1729,9 @@ pub fn hit_test<'a>(
 
       // Apply scroll offset
       if *scrollable {
-          if let Some(offsets) = scroll_offsets {
+          if let Some(state) = interaction {
               if let Some(wid) = id {
-                  if let Some(scroll) = offsets.get(wid) {
+                  if let Some(scroll) = state.scroll_offsets.get(wid) {
                       local_point += *scroll;
                   }
               }
@@ -1430,7 +1740,7 @@ pub fn hit_test<'a>(
 
       // Check children in reverse order (top to bottom)
       for child in children.iter().rev() {
-        if let Some(result) = hit_test(child, local_point, scroll_offsets) {
+        if let Some(result) = hit_test(child, local_point, interaction) {
           return Some(result);
         }
       }
@@ -1451,6 +1761,61 @@ pub fn hit_test<'a>(
            } else {
              None
            }
+    }
+    Widget::NumberInput { bounds, id, show_spinner, .. } => {
+        if point.x >= bounds.x && point.x <= bounds.x + bounds.width
+           && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
+             
+             if *show_spinner {
+                 let spinner_width = 20.0;
+                 let spinner_x = bounds.x + bounds.width - spinner_width;
+                 if point.x >= spinner_x {
+                     let mid_y = bounds.y + bounds.height * 0.5;
+                     if point.y < mid_y {
+                         Some(HitTestResult { widget, action: format!("{}:up", id) })
+                     } else {
+                         Some(HitTestResult { widget, action: format!("{}:down", id) })
+                     }
+                 } else {
+                     Some(HitTestResult { widget, action: id.clone() })
+                 }
+             } else {
+                 Some(HitTestResult { widget, action: id.clone() })
+             }
+           } else {
+             None
+           }
+    }
+    Widget::Autocomplete {
+        id, suggestions, max_visible, bounds, ..
+    } => {
+        let hit_input = point.x >= bounds.x && point.x <= bounds.x + bounds.width
+           && point.y >= bounds.y && point.y <= bounds.y + bounds.height;
+           
+        if let Some(state) = interaction {
+             if state.focused_id.as_deref() == Some(id) && !suggestions.is_empty() {
+                 let item_height = 24.0;
+                 let count = suggestions.len().min(*max_visible);
+                 let dd_height = count as f32 * item_height;
+                 let dd_width = bounds.width;
+                 let dd_y = bounds.y + bounds.height + 2.0; 
+                 
+                 if point.x >= bounds.x && point.x <= bounds.x + dd_width 
+                    && point.y >= dd_y && point.y <= dd_y + dd_height {
+                        let local_y = point.y - dd_y;
+                        let idx = (local_y / item_height) as usize;
+                        if idx < count {
+                             return Some(HitTestResult { widget, action: format!("{}:opt:{}", id, idx) });
+                        }
+                 }
+             }
+        }
+        
+        if hit_input {
+             Some(HitTestResult { widget, action: id.clone() })
+        } else {
+             None
+        }
     }
     Widget::Checkbox { bounds, id, .. } => {
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
@@ -1575,8 +1940,8 @@ pub fn hit_test<'a>(
                        return Some(HitTestResult { widget, action: wid.clone() });
                   }
                   
-                  let scroll_y = if let Some(offsets) = scroll_offsets {
-                       offsets.get(wid).map(|v| v.y).unwrap_or(0.0)
+                  let scroll_y = if let Some(state) = interaction {
+                       state.scroll_offsets.get(wid).map(|v| v.y).unwrap_or(0.0)
                   } else { 0.0 };
                   
                   let content_y = local_y - header_height + scroll_y;

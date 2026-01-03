@@ -22,6 +22,8 @@ pub struct InteractionState {
   pub clicked_id: Option<String>,
   /// Scroll offsets for scrollable containers (ID -> Offset).
   pub scroll_offsets: std::collections::HashMap<String, Vec2>,
+  /// Validation errors for widgets (ID -> List of errors).
+  pub validation_errors: std::collections::HashMap<String, Vec<String>>,
 }
 
 impl InteractionState {

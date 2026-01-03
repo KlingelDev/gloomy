@@ -5,6 +5,7 @@
 use crate::layout::Layout;
 use std::cell::RefCell;
 use serde::{Deserialize, Serialize};
+use crate::validation::ValidationRule;
 
 /// RGBA color as tuple for serde.
 pub type Color = (f32, f32, f32, f32);
@@ -466,6 +467,8 @@ pub enum Widget {
     #[serde(default)]
     bounds: WidgetBounds,
     #[serde(default)]
+    validation: Option<Vec<ValidationRule>>,
+    #[serde(default)]
     style: TextInputStyle,
     #[serde(default)]
     width: f32,
@@ -481,6 +484,76 @@ pub enum Widget {
     col_span: usize,
     #[serde(default = "default_span_one")]
     row_span: usize,
+  },
+
+  /// Numeric input with optional spinner buttons.
+  NumberInput {
+    id: String,
+    #[serde(default)]
+    value: f64,
+    #[serde(default)]
+    min: Option<f64>,
+    #[serde(default)]
+    max: Option<f64>,
+    #[serde(default = "default_step")]
+    step: f64,
+    #[serde(default)]
+    precision: usize,
+    #[serde(default = "default_true")]
+    show_spinner: bool,
+    #[serde(default)]
+    bounds: WidgetBounds,
+    #[serde(default)]
+    validation: Option<Vec<ValidationRule>>,
+    #[serde(default)]
+    style: NumberInputStyle,
+    #[serde(default)]
+    width: f32,
+    #[serde(default)]
+    height: f32,
+    #[serde(default)]
+    flex: f32,
+    #[serde(default)]
+    grid_col: Option<usize>,
+    #[serde(default)]
+    grid_row: Option<usize>,
+    #[serde(default = "default_span_one")]
+    col_span: usize,
+    #[serde(default = "default_span_one")]
+    row_span: usize,
+  },
+
+  /// Autocomplete dropdown input.
+  Autocomplete {
+      id: String,
+      #[serde(default)]
+      value: String,
+      #[serde(default)]
+      placeholder: String,
+      #[serde(default)]
+      suggestions: Vec<String>,
+      #[serde(default = "default_max_visible")]
+      max_visible: usize,
+      #[serde(default)]
+      bounds: WidgetBounds,
+      #[serde(default)]
+      style: AutocompleteStyle,
+      #[serde(default)]
+      validation: Option<Vec<ValidationRule>>,
+      #[serde(default)]
+      width: f32,
+      #[serde(default)]
+      height: f32,
+      #[serde(default)]
+      flex: f32,
+      #[serde(default)]
+      grid_col: Option<usize>,
+      #[serde(default)]
+      grid_row: Option<usize>,
+      #[serde(default = "default_span_one")]
+      col_span: usize,
+      #[serde(default = "default_span_one")]
+      row_span: usize,
   },
 
   /// Checkbox toggle.
@@ -724,6 +797,8 @@ impl Widget {
           Widget::Container { bounds, .. } => *bounds,
           Widget::Button { bounds, .. } => *bounds,
           Widget::TextInput { bounds, .. } => *bounds,
+          Widget::NumberInput { bounds, .. } => *bounds,
+          Widget::Autocomplete { bounds, .. } => *bounds,
           Widget::Checkbox { bounds, .. } => *bounds,
           Widget::Slider { bounds, .. } => *bounds,
           Widget::Image { bounds, .. } => *bounds,
@@ -746,6 +821,7 @@ impl Widget {
       match self {
           Widget::Button { action, .. } => Some(action),
           Widget::TextInput { id, .. } => Some(id),
+          Widget::NumberInput { id, .. } => Some(id),
           Widget::Checkbox { id, .. } => Some(id),
           Widget::Slider { id, .. } => Some(id),
           Widget::ToggleSwitch { id, .. } => Some(id),
@@ -753,6 +829,30 @@ impl Widget {
           Widget::Dropdown { id, .. } => Some(id),
           _ => None,
       }
+  }
+
+  /// Validates the widget's current value against its rules.
+  pub fn validate(&self) -> Vec<String> {
+      let mut errors = Vec::new();
+      match self {
+          Widget::TextInput { value, validation: Some(rules), .. } => {
+              for rule in rules {
+                  if let Err(e) = rule.validate(value) {
+                      errors.push(e);
+                  }
+              }
+          }
+          Widget::NumberInput { value, validation: Some(rules), .. } => {
+              let val_str = value.to_string();
+              for rule in rules {
+                  if let Err(e) = rule.validate(&val_str) {
+                      errors.push(e);
+                  }
+              }
+          }
+          _ => {}
+      }
+      errors
   }
 }
 
@@ -812,6 +912,113 @@ pub struct TextInputStyle {
     pub font: Option<String>,
 }
 
+/// Style for NumberInput widget.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NumberInputStyle {
+    #[serde(default)]
+    pub background: Option<Color>,
+    #[serde(default)]
+    pub background_focused: Option<Color>,
+    #[serde(default)]
+    pub border: Option<Border>,
+    #[serde(default)]
+    pub border_focused: Option<Border>,
+    #[serde(default = "default_text_color")]
+    pub text_color: Color,
+    #[serde(default = "default_spinner_color")]
+    pub spinner_color: Color,
+    #[serde(default = "default_spinner_hover_color")]
+    pub spinner_hover_color: Color,
+    #[serde(default)]
+    pub corner_radius: f32,
+    #[serde(default)]
+    pub font: Option<String>,
+}
+
+impl Default for NumberInputStyle {
+    fn default() -> Self {
+        Self {
+            background: Some((0.15, 0.15, 0.18, 1.0)),
+            background_focused: Some((0.18, 0.18, 0.22, 1.0)),
+            border: Some(Border {
+                width: 1.0,
+                color: (0.3, 0.3, 0.35, 1.0),
+                ..Default::default()
+            }),
+            border_focused: Some(Border {
+                width: 1.0,
+                color: (0.4, 0.6, 1.0, 1.0),
+                ..Default::default()
+            }),
+            text_color: (0.9, 0.9, 0.9, 1.0),
+            spinner_color: (0.5, 0.5, 0.55, 1.0),
+            spinner_hover_color: (0.7, 0.7, 0.75, 1.0),
+            corner_radius: 4.0,
+            font: None,
+        }
+    }
+}
+
+/// Style for Autocomplete widget.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AutocompleteStyle {
+    #[serde(default)]
+    pub background: Option<Color>,
+    #[serde(default)]
+    pub background_focused: Option<Color>,
+    #[serde(default)]
+    pub border: Option<Border>,
+    #[serde(default)]
+    pub border_focused: Option<Border>,
+    #[serde(default = "default_text_color")]
+    pub text_color: Color,
+    #[serde(default = "default_cursor_color")]
+    pub cursor_color: Color,
+    #[serde(default)]
+    pub corner_radius: f32,
+    #[serde(default)]
+    pub font: Option<String>,
+    #[serde(default)]
+    pub dropdown_background: Option<Color>,
+    #[serde(default)]
+    pub dropdown_border: Option<Border>,
+    #[serde(default = "default_text_color")]
+    pub dropdown_text_color: Color,
+    #[serde(default = "default_highlight_color")]
+    pub dropdown_highlight_color: Color,
+}
+
+impl Default for AutocompleteStyle {
+    fn default() -> Self {
+        Self {
+            background: Some((0.15, 0.15, 0.18, 1.0)),
+            background_focused: Some((0.18, 0.18, 0.22, 1.0)),
+            border: Some(Border {
+                width: 1.0,
+                color: (0.3, 0.3, 0.35, 1.0),
+                ..Default::default()
+            }),
+            border_focused: Some(Border {
+                width: 1.0,
+                color: (0.4, 0.6, 1.0, 1.0),
+                ..Default::default()
+            }),
+            text_color: (0.9, 0.9, 0.9, 1.0),
+            cursor_color: (0.8, 0.8, 0.8, 1.0),
+            corner_radius: 4.0,
+            font: None,
+            dropdown_background: Some((0.12, 0.12, 0.15, 1.0)),
+            dropdown_border: Some(Border {
+                width: 1.0,
+                color: (0.25, 0.25, 0.3, 1.0),
+                ..Default::default()
+            }),
+            dropdown_text_color: (0.9, 0.9, 0.9, 1.0),
+            dropdown_highlight_color: (0.25, 0.35, 0.5, 1.0),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CheckboxStyle {
     #[serde(default = "default_checkbox_color")]
@@ -846,8 +1053,14 @@ pub struct SliderStyle {
 fn default_text_color() -> Color { (0.9, 0.9, 0.95, 1.0) }
 fn default_placeholder_color() -> Color { (0.5, 0.5, 0.6, 1.0) }
 fn default_cursor_color() -> Color { (0.8, 0.8, 0.8, 1.0) }
-fn default_checkbox_checked() -> Color { (0.2, 0.2, 0.2, 1.0) } // Same as bg usually? Or accent?
+fn default_checkbox_checked() -> Color { (0.2, 0.2, 0.2, 1.0) }
 fn default_thumb_color() -> Color { (1.0, 1.0, 1.0, 1.0) }
+fn default_step() -> f64 { 1.0 }
+fn default_true() -> bool { true }
+fn default_spinner_color() -> Color { (0.5, 0.5, 0.55, 1.0) }
+fn default_spinner_hover_color() -> Color { (0.7, 0.7, 0.75, 1.0) }
+fn default_max_visible() -> usize { 5 }
+fn default_highlight_color() -> Color { (0.25, 0.35, 0.5, 1.0) }
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]

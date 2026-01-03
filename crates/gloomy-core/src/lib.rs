@@ -28,6 +28,7 @@ pub mod style_context;
 pub mod data_source;
 pub mod datagrid;
 pub mod tree;
+pub mod validation;
 pub mod rich_text;
 pub mod widget_state;
 
