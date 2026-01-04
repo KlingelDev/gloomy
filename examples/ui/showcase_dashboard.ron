@@ -44,14 +44,38 @@ Container(
         Label(text: "Recent Activity", size: 20.0, color: (0.8, 0.8, 0.8, 1.0)),
         
         // Placeholder for a list or grid
+        // Activity Log DataGrid
         Container(
-            bounds: (width: 800.0, height: 200.0),
-            background: Some((0.15, 0.15, 0.18, 1.0)),
-            corner_radius: 8.0,
-            padding: 20.0,
-            children: [
-                Label(text: "(Activity Log Placeholder - Imagine a DataGrid here)", size: 14.0, color: (0.5, 0.5, 0.6, 1.0))
-            ]
+             bounds: (width: 800.0, height: 300.0),
+             background: Some((0.15, 0.15, 0.18, 1.0)),
+             corner_radius: 8.0,
+             padding: 0.0,
+             children: [
+                 DataGrid(
+                     id: Some("activity_log"),
+                     columns: [
+                         (header: "Time", field: "time", width: Fixed(100.0), align: Center),
+                         (header: "Event", field: "event", width: Flex(1.0), align: Left),
+                         (header: "Status", field: "status", width: Fixed(120.0), align: Center),
+                         (header: "User", field: "user", width: Fixed(120.0), align: Left),
+                     ],
+                     data_source_id: Some("activity_log"),
+                     header_height: 40.0,
+                     row_height: 36.0,
+                     striped: true,
+                     show_vertical_lines: false,
+                     show_horizontal_lines: true,
+                     selection_mode: Single,
+                     style: (
+                         header_background: (0.12, 0.12, 0.14, 1.0),
+                         header_text_color: (0.7, 0.7, 0.75, 1.0),
+                         row_background_odd: (0.15, 0.15, 0.18, 1.0), 
+                         row_background_even: (0.17, 0.17, 0.20, 1.0),
+                         selected_background: (0.2, 0.3, 0.5, 0.5),
+                         border_color: (0.25, 0.25, 0.28, 1.0)
+                     )
+                 )
+             ]
         )
     ]
 )

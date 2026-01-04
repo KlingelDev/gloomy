@@ -33,6 +33,9 @@ pub mod rich_text;
 pub mod widget_state;
 pub mod kpi;
 
+#[cfg(test)]
+mod tests;
+
 pub use container::Container;
 pub use glam::{Vec2, Vec4};
 pub use interaction::InteractionState;

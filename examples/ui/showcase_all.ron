@@ -1,0 +1,108 @@
+Container(
+    layout: (
+        direction: Column,
+        justify_content: Start,
+        align_items: Stretch,
+        spacing: 20.0,
+    ),
+    padding: 20.0,
+    flex: 1.0,
+    children: [
+        Label(text: "All Widgets Showcase", size: 28.0, color: (1.0, 1.0, 1.0, 1.0)),
+        
+        // 1. Basic Inputs
+        Container(
+            layout: (direction: Row, spacing: 20.0, align_items: Center),
+            children: [
+                Button(text: "Standard Button", action: "btn1"),
+                Checkbox(id: "chk1", checked: true),
+                Label(text: "Checkbox", size: 14.0),
+                ToggleSwitch(id: "swt1", checked: false),
+                Label(text: "Switch", size: 14.0),
+            ]
+        ),
+        
+        Divider(orientation: Horizontal),
+        
+        // 2. Text Inputs
+        Container(
+            layout: (direction: Row, spacing: 20.0, align_items: Center),
+            children: [
+                TextInput(id: "txt1", value: "", placeholder: "Text Input..."),
+                NumberInput(id: "num1", value: 42.0),
+            ]
+        ),
+        
+        Divider(orientation: Horizontal),
+        
+        // 3. Selection & Pickers
+        Container(
+            layout: (direction: Row, spacing: 20.0, align_items: Center),
+            children: [
+                Dropdown(id: "drop1", options: ["Option A", "Option B", "Option C"], selected_index: Some(0)),
+                DatePicker(id: "date1", value: None),
+                Container(
+                    layout: (direction: Row, spacing: 10.0),
+                    children: [
+                        RadioButton(group_id: "g1", value: "opt1", selected: true, label: "Option 1"),
+                        RadioButton(group_id: "g1", value: "opt2", selected: false, label: "Option 2"),
+                    ]
+                )
+            ]
+        ),
+        
+        Divider(orientation: Horizontal),
+
+        // 4. Sliders & Progress
+        Container(
+            layout: (direction: Column, spacing: 10.0),
+            children: [
+                Container(
+                    layout: (direction: Row, spacing: 10.0, align_items: Center),
+                    children: [
+                        Label(text: "Slider:", size: 14.0, width: 60.0),
+                        Slider(id: "sld1", value: 50.0, min: 0.0, max: 100.0, width: 200.0),
+                    ]
+                ),
+                Container(
+                     layout: (direction: Row, spacing: 10.0, align_items: Center),
+                     children: [
+                         Label(text: "Progress:", size: 14.0, width: 60.0),
+                         ProgressBar(value: 0.7, width: 200.0),
+                     ]
+                ),
+            ]
+        ),
+        
+        Divider(orientation: Horizontal),
+
+        // 5. Icons & Kpi
+        Container(
+            layout: (direction: Row, spacing: 20.0, align_items: Center),
+            children: [
+                Icon(id: "icon1", icon_name: "settings", size: 32.0, color: Some((0.8, 0.8, 0.9, 1.0))),
+                Icon(id: "icon2", icon_name: "user", size: 32.0, color: Some((0.3, 0.8, 0.3, 1.0))),
+                
+                Spacer(size: 40.0),
+                
+                KpiCard(
+                     title: "Demo KPI", 
+                     value: "98.5%", 
+                     trend: Some((direction: Up, value: "+2.1%")),
+                     bounds: (width: 200.0, height: 120.0),
+                     style: (
+                         background: (0.1, 0.1, 0.1, 1.0),
+                         border_color: (0.3, 0.3, 0.3, 1.0),
+                         border_width: 1.0,
+                         corner_radius: 8.0,
+                         label_color: (0.7, 0.7, 0.7, 1.0),
+                         label_size: 14.0,
+                         value_color: (1.0, 1.0, 1.0, 1.0),
+                         value_size: 28.0,
+                         trend_up_color: (0.0, 0.8, 0.4, 1.0)
+                     )
+                ),
+            ]
+        )
+    ]
+)

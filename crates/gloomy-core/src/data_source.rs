@@ -32,31 +32,24 @@ pub trait DataSource: Send + Sync {
     /// Returns the total number of columns in the data source.
     fn column_count(&self) -> usize;
 
+    /// Returns a version identifier that changes whenever data is modified.
+    /// This allows the UI to skip expensive updates if the data hasn't changed.
+    fn version(&self) -> u64;
+
     /// Gets the cell value as a formatted string.
-    ///
-    /// # Arguments
-    /// * `row` - Zero-based row index
-    /// * `col` - Zero-based column index
     fn cell_text(&self, row: usize, col: usize) -> String;
 
     /// Gets the cell value for sorting and comparison.
-    ///
-    /// Default implementation returns Text variant of cell_text.
     fn cell_value(&self, row: usize, col: usize) -> CellValue {
         CellValue::Text(self.cell_text(row, col))
     }
 
     /// Sorts the data by the specified column.
-    ///
-    /// # Arguments
-    /// * `col` - Zero-based column index
-    /// * `direction` - Sort direction
-    fn sort(&mut self, _col: usize, _direction: SortDirection) {
+    fn sort(&mut self, col: usize, direction: SortDirection) {
         // Default implementation does nothing
     }
 
     /// Sets a cell value. Returns true if successful.
-    /// Default implementation returns false (read-only).
     fn set_cell(&mut self, _row: usize, _col: usize, _value: CellValue) -> bool {
         false
     }
@@ -118,13 +111,18 @@ impl PartialOrd for CellValue {
     }
 }
 
-/// Simple vector-based data source.
+
+/// Simple vector-based data source (Columnar Storage).
 ///
-/// Stores data as a vector of rows, where each row is a vector
-/// of CellValues. Suitable for small to medium datasets.
+/// Stores data as a vector of columns (Column-Major), which is more efficient
+/// for bulk updates and certain access patterns. The public API generic inputs
+/// are transposed on creation.
 pub struct VecDataSource {
-    columns: Vec<String>,
-    rows: Vec<Vec<CellValue>>,
+    headers: Vec<String>,
+    // Outer vector is columns, Inner vector is rows.
+    // data[col][row]
+    data: Vec<Vec<CellValue>>,
+    version: u64,
 }
 
 impl VecDataSource {
@@ -132,76 +130,131 @@ impl VecDataSource {
     ///
     /// # Arguments
     /// * `columns` - Column headers
-    /// * `rows` - Row data (each row must have same length as columns)
+    /// * `rows` - Row data (Row-Major input is transposed to Column-Major storage)
     pub fn new(columns: Vec<String>, rows: Vec<Vec<CellValue>>) -> Self {
-        Self { columns, rows }
+        let col_count = columns.len();
+        let row_count = rows.len();
+        
+        let mut data = vec![Vec::with_capacity(row_count); col_count];
+        
+        // Transpose row-major input to column-major storage
+        for row in rows {
+            let len = row.len();
+            for (c, val) in row.into_iter().enumerate() {
+                if c < col_count {
+                    data[c].push(val);
+                }
+            }
+            // Fill missing columns with None if row was too short
+            for col_data in data.iter_mut().take(col_count).skip(len) {
+                col_data.push(CellValue::None);
+            }
+        }
+
+        Self { 
+            headers: columns, 
+            data,
+            version: 0 
+        }
     }
 
     /// Creates an empty data source with column headers.
     pub fn with_columns(columns: Vec<String>) -> Self {
+        let col_count = columns.len();
         Self {
-            columns,
-            rows: Vec::new(),
+            headers: columns,
+            data: vec![Vec::new(); col_count],
+            version: 0,
         }
     }
 
     /// Adds a row to the data source.
     pub fn add_row(&mut self, row: Vec<CellValue>) {
-        self.rows.push(row);
+        let len = row.len();
+        for (c, val) in row.into_iter().enumerate() {
+            if c < self.data.len() {
+                self.data[c].push(val);
+            }
+        }
+        // Fill remaining columns if row is short
+        for col_data in self.data.iter_mut().skip(len) {
+            col_data.push(CellValue::None);
+        }
+        self.version += 1;
     }
 
     /// Gets a reference to the column headers.
     pub fn columns(&self) -> &[String] {
-        &self.columns
-    }
-
-    /// Gets a mutable reference to the rows for in-place sorting.
-    pub fn rows_mut(&mut self) -> &mut Vec<Vec<CellValue>> {
-        &mut self.rows
+        &self.headers
     }
 }
 
 impl DataSource for VecDataSource {
     fn row_count(&self) -> usize {
-        self.rows.len()
+        if self.data.is_empty() { 0 } else { self.data[0].len() }
     }
 
     fn column_count(&self) -> usize {
-        self.columns.len()
+        self.headers.len()
+    }
+
+    fn version(&self) -> u64 {
+        self.version
     }
 
     fn cell_text(&self, row: usize, col: usize) -> String {
-        self.rows
-            .get(row)
-            .and_then(|r| r.get(col))
+        self.data
+            .get(col)
+            .and_then(|c| c.get(row))
             .map(|v| v.to_string())
             .unwrap_or_default()
     }
 
     fn cell_value(&self, row: usize, col: usize) -> CellValue {
-        self.rows
-            .get(row)
-            .and_then(|r| r.get(col))
+        self.data
+            .get(col)
+            .and_then(|c| c.get(row))
             .cloned()
             .unwrap_or(CellValue::None)
     }
 
     fn sort(&mut self, col: usize, direction: SortDirection) {
-        self.rows.sort_by(|a, b| {
-            let val_a = a.get(col).unwrap_or(&CellValue::None);
-            let val_b = b.get(col).unwrap_or(&CellValue::None);
+        if col >= self.data.len() { return; }
+        
+        let row_count = self.row_count();
+        if row_count == 0 { return; }
+
+        // Create indices
+        let mut indices: Vec<usize> = (0..row_count).collect();
+
+        // Sort indices based on the specific column
+        let target_col = &self.data[col];
+        indices.sort_by(|&a, &b| {
+            let val_a = &target_col[a];
+            let val_b = &target_col[b];
             let cmp = val_a.partial_cmp(val_b).unwrap_or(std::cmp::Ordering::Equal);
             match direction {
                 SortDirection::Ascending => cmp,
                 SortDirection::Descending => cmp.reverse(),
             }
         });
+
+        // Reorder ALL columns based on new indices
+        for col_data in self.data.iter_mut() {
+            let mut new_col = Vec::with_capacity(row_count);
+            for &idx in &indices {
+                new_col.push(col_data[idx].clone());
+            }
+            *col_data = new_col;
+        }
+        self.version += 1;
     }
 
     fn set_cell(&mut self, row: usize, col: usize, value: CellValue) -> bool {
-        if let Some(r) = self.rows.get_mut(row) {
-            if col < r.len() {
-                r[col] = value;
+        if let Some(c) = self.data.get_mut(col) {
+            if row < c.len() {
+                c[row] = value;
+                self.version += 1;
                 return true;
             }
         }
@@ -209,15 +262,19 @@ impl DataSource for VecDataSource {
     }
 
     fn add_row_default(&mut self) -> Option<usize> {
-        let col_count = self.columns.len();
-        let new_row = vec![CellValue::None; col_count];
-        self.rows.push(new_row);
-        Some(self.rows.len() - 1)
+        for col_data in self.data.iter_mut() {
+            col_data.push(CellValue::None);
+        }
+        self.version += 1;
+        Some(self.row_count() - 1)
     }
 
     fn delete_row(&mut self, row: usize) -> bool {
-        if row < self.rows.len() {
-            self.rows.remove(row);
+        if row < self.row_count() {
+            for col_data in self.data.iter_mut() {
+                col_data.remove(row);
+            }
+            self.version += 1;
             true
         } else {
             false

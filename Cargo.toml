@@ -3,6 +3,7 @@ members = [
     "crates/gloomy-core",
     "crates/gloomy-app",
     "crates/gloomy-designer",
+    "crates/gloomy-driver",
 ]
 
 [workspace.package]
