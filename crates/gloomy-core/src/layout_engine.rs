@@ -440,6 +440,52 @@ pub fn compute_layout(
           valid: true,
       }));
     }
+    Widget::Tab {
+        bounds,
+        orientation,
+        selected,
+        tabs,
+        // layout_cache, // If we want caching
+        ..
+    } => {
+        // Simple layout: Header takes space, content takes the rest.
+        let (header_size, content_rect) = match orientation {
+            Orientation::Horizontal => {
+                 let header_h = 32.0; // Fixed header height for now
+                 (header_h, 
+                  crate::widget::WidgetBounds {
+                      x: bounds.x,
+                      y: bounds.y + header_h,
+                      width: bounds.width,
+                      height: (bounds.height - header_h).max(0.0),
+                  })
+            }
+            Orientation::Vertical => {
+                 let header_w = 120.0; // Fixed header width for now
+                 (header_w,
+                  crate::widget::WidgetBounds {
+                      x: bounds.x + header_w,
+                      y: bounds.y,
+                      width: (bounds.width - header_w).max(0.0),
+                      height: bounds.height,
+                  })
+            }
+        };
+        
+        // Layout selected content
+        if let Some(tab) = tabs.get_mut(*selected) {
+             set_pos(&mut tab.content, content_rect.x, content_rect.y);
+             set_size(&mut tab.content, content_rect.width, content_rect.height);
+             
+             compute_layout(
+                 &mut tab.content,
+                 content_rect.x,
+                 content_rect.y,
+                 content_rect.width,
+                 content_rect.height
+             );
+        }
+    }
     _ => {
       // Leaf widgets
     }
@@ -471,6 +517,7 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::Tree { flex, .. } => *flex,
     Widget::KpiCard { flex, .. } => *flex,
     Widget::ListView { flex, .. } => *flex,
+    Widget::Tab { flex, .. } => *flex,
   }
 }
 
@@ -620,6 +667,7 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
     },
     Widget::Tree { bounds, .. } => (bounds.width, bounds.height),
     Widget::KpiCard { bounds, .. } => (bounds.width, bounds.height),
+    Widget::Tab { bounds, .. } => (bounds.width, bounds.height),
   }
 }
 
@@ -730,6 +778,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
         bounds.width = w;
         bounds.height = h;
     }
+    Widget::Tab { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
   }
 }
 
@@ -801,6 +853,10 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
         bounds.x = x;
         bounds.y = y;
     }
+    Widget::Tab { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
     Widget::ToggleSwitch { bounds, .. } => {
         bounds.x = x;
         bounds.y = y;
@@ -818,14 +874,6 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
         bounds.y = y;
     }
     Widget::Tree { bounds, .. } => {
-        bounds.x = x;
-        bounds.y = y;
-    }
-    Widget::KpiCard { bounds, .. } => {
-        bounds.x = x;
-        bounds.y = y;
-    }
-    Widget::ListView { bounds, .. } => {
         bounds.x = x;
         bounds.y = y;
     }
@@ -855,9 +903,10 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::ProgressBar { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::RadioButton { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Dropdown { grid_col, .. } => grid_col.unwrap_or(0),
-    Widget::Tree { grid_col, .. } => grid_col.unwrap_or(0),
+
     Widget::KpiCard { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::ListView { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Tab { grid_col, .. } => grid_col.unwrap_or(0),
   }
 }
 
@@ -886,6 +935,7 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::Tree { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::KpiCard { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::ListView { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::Tab { grid_row, .. } => grid_row.unwrap_or(0),
   }
 }
 
@@ -915,6 +965,7 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::Tree { grid_col, .. } => *grid_col,
     Widget::KpiCard { grid_col, .. } => *grid_col,
     Widget::ListView { grid_col, .. } => *grid_col,
+    Widget::Tab { grid_col, .. } => *grid_col,
   }
 }
 
@@ -943,8 +994,10 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::Tree { grid_row, .. } => *grid_row,
     Widget::KpiCard { grid_row, .. } => *grid_row,
     Widget::ListView { grid_row, .. } => *grid_row,
+    Widget::Tab { grid_row, .. } => *grid_row,
   }
 }
+
 
 // Helper to get col span
 fn get_col_span(widget: &Widget) -> usize {
@@ -971,6 +1024,7 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::Tree { col_span, .. } => *col_span,
     Widget::KpiCard { col_span, .. } => *col_span,
     Widget::ListView { col_span, .. } => *col_span,
+    Widget::Tab { col_span, .. } => *col_span,
   }
 }
 
@@ -999,5 +1053,6 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::Button { row_span, .. } => *row_span,
     Widget::KpiCard { row_span, .. } => *row_span,
     Widget::ListView { row_span, .. } => *row_span,
+    Widget::Tab { row_span, .. } => *row_span,
   }
 }

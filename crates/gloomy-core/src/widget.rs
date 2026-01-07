@@ -133,6 +133,42 @@ pub enum Widget {
     render_cache: RefCell<Option<Box<RenderCache>>>,
   },
 
+  /// Tab widget for switching between pages.
+  Tab {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    tabs: Vec<TabItem>,
+    #[serde(default)]
+    selected: usize,
+    #[serde(default)]
+    orientation: Orientation,
+    #[serde(default)]
+    style: TabStyle,
+    #[serde(default)]
+    bounds: WidgetBounds,
+    #[serde(default)]
+    width: Option<f32>,
+    #[serde(default)]
+    height: Option<f32>,
+    #[serde(default)]
+    layout: Layout,
+    #[serde(default)]
+    flex: f32,
+    #[serde(default)]
+    grid_col: Option<usize>,
+    #[serde(default)]
+    grid_row: Option<usize>,
+    #[serde(default = "default_span_one")]
+    col_span: usize,
+    #[serde(default = "default_span_one")]
+    row_span: usize,
+    #[serde(default)]
+    layout_cache: Option<Box<LayoutCache>>,
+    #[serde(skip)]
+    render_cache: RefCell<Option<Box<RenderCache>>>,
+  },
+
   /// Text label widget.
   Label {
     text: String,
@@ -724,6 +760,78 @@ pub enum Widget {
   },
 }
 
+/// Item representing a single tab.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabItem {
+    /// Title shown on the tab header.
+    pub title: String,
+    /// Content widget displayed when the tab is selected.
+    pub content: Box<Widget>,
+}
+
+/// Styling options for the Tab widget.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TabStyle {
+    /// Background color of the tab bar.
+    #[serde(default = "default_tab_background")]
+    pub background: Color,
+    /// Color of the selected tab header.
+    #[serde(default = "default_tab_selected")]
+    pub selected_color: Color,
+    /// Color of unselected tab headers.
+    #[serde(default = "default_tab_unselected")]
+    pub unselected_color: Color,
+    /// Optional border around the tab bar.
+    pub border: Option<Border>,
+    /// Optional shadow for the tab bar.
+    pub shadow: Option<Shadow>,
+}
+
+fn default_tab_background() -> Color { (0.15, 0.15, 0.18, 1.0) }
+fn default_tab_selected() -> Color { (0.3, 0.6, 1.0, 1.0) }
+fn default_tab_unselected() -> Color { (0.5, 0.5, 0.5, 1.0) }
+
+impl Default for TabStyle {
+    fn default() -> Self {
+        TabStyle {
+            background: default_tab_background(),
+            selected_color: default_tab_selected(),
+            unselected_color: default_tab_unselected(),
+            border: None,
+            shadow: None,
+        }
+    }
+}
+
+impl Widget {
+    /// Convenience constructor for a Tab widget.
+    pub fn tab(
+        id: impl Into<String>,
+        tabs: Vec<TabItem>,
+        orientation: Orientation,
+        style: TabStyle,
+    ) -> Self {
+        Widget::Tab {
+            id: Some(id.into()),
+            tabs,
+            selected: 0,
+            orientation,
+            style,
+            bounds: WidgetBounds::default(),
+            width: None,
+            height: None,
+            layout: Layout::default(),
+            flex: 0.0,
+            grid_col: None,
+            grid_row: None,
+            col_span: 1,
+            row_span: 1,
+            layout_cache: None,
+            render_cache: RefCell::new(None),
+        }
+    }
+}
+
 fn default_font_size() -> f32 {
   16.0
 }
@@ -862,6 +970,7 @@ impl Widget {
           Widget::Tree { bounds, .. } => *bounds,
           Widget::KpiCard { bounds, .. } => *bounds,
           Widget::ListView { bounds, .. } => *bounds,
+          Widget::Tab { bounds, .. } => *bounds,
       }
   }
 
@@ -879,6 +988,7 @@ impl Widget {
           Widget::RadioButton { group_id, value, .. } => Some(value), // Use value as ID for specific radio? Or group? Probably individual click target needs diff ID.
           Widget::Dropdown { id, .. } => Some(id),
           Widget::ListView { id, .. } => Some(id), 
+          Widget::Tab { id, .. } => id.as_deref(),
           _ => None,
       }
   }

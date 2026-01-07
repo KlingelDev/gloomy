@@ -1879,6 +1879,68 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
               );
          }
     }
+
+    Widget::Tab {
+        id, tabs, selected, orientation, style, bounds, ..
+    } => {
+        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let header_rect = match orientation {
+            crate::widget::Orientation::Horizontal => {
+                 crate::Rect { x: pos.x, y: pos.y, width: bounds.width, height: 32.0 }
+            }
+            crate::widget::Orientation::Vertical => {
+                 crate::Rect { x: pos.x, y: pos.y, width: 120.0, height: bounds.height }
+            }
+        };
+
+        // Draw Tab Bar Background
+        ctx.primitives.draw_rect(
+             Vec2::new(header_rect.x + header_rect.width * 0.5, header_rect.y + header_rect.height * 0.5),
+             Vec2::new(header_rect.width * 0.5, header_rect.height * 0.5),
+             Vec4::from(style.background),
+             [0.0; 4],
+             0.0
+        );
+
+        // Draw Tabs
+        let tab_count = tabs.len();
+        if tab_count > 0 {
+             let (tab_w, tab_h) = match orientation {
+                 crate::widget::Orientation::Horizontal => (header_rect.width / tab_count as f32, header_rect.height),
+                 crate::widget::Orientation::Vertical => (header_rect.width, 32.0), // Fixed height per tab in vertical
+             };
+
+             for (i, tab) in tabs.iter().enumerate() {
+                 let (tx, ty) = match orientation {
+                     crate::widget::Orientation::Horizontal => (header_rect.x + i as f32 * tab_w, header_rect.y),
+                     crate::widget::Orientation::Vertical => (header_rect.x, header_rect.y + i as f32 * tab_h),
+                 };
+                 
+                 let color = if i == *selected { style.selected_color } else { style.unselected_color };
+                 
+                 // Draw Tab Rect
+                 ctx.primitives.draw_rect(
+                      Vec2::new(tx + tab_w * 0.5, ty + tab_h * 0.5),
+                      Vec2::new(tab_w * 0.5, tab_h * 0.5),
+                      Vec4::from(color),
+                      [0.0; 4],
+                      1.0 // Border logic can be enhanced
+                 );
+                 
+                 // Draw Title
+                 ctx.text.draw(
+                      ctx.device, ctx.queue, &tab.title,
+                      Vec2::new(tx + tab_w * 0.5, ty + tab_h * 0.5),
+                      14.0, Vec4::ONE, HorizontalAlign::Center, None
+                 );
+             }
+        }
+
+        // Render Selected Content
+        if let Some(tab) = tabs.get(*selected) {
+             render_widget(&tab.content, ctx);
+        }
+    }
   }
 }
 
@@ -2330,6 +2392,59 @@ pub fn hit_test<'a>(
              None
         }
     }
+    Widget::Tab { id, bounds, tabs, selected, orientation, .. } => {
+        if point.x >= bounds.x && point.x <= bounds.x + bounds.width
+           && point.y >= bounds.y && point.y <= bounds.y + bounds.height {
+            
+            // Check Header
+             let (header_w, header_h) = match orientation {
+                 crate::widget::Orientation::Horizontal => (bounds.width, 32.0),
+                 crate::widget::Orientation::Vertical => (120.0, bounds.height),
+             };
+             
+             // Simple hit test for tabs
+             let tab_count = tabs.len();
+             if tab_count > 0 {
+                  match orientation {
+                      crate::widget::Orientation::Horizontal => {
+                          if point.y >= bounds.y && point.y <= bounds.y + header_h {
+                              let local_x = point.x - bounds.x;
+                              let tab_w = header_w / tab_count as f32;
+                              let idx = (local_x / tab_w) as usize;
+                              if idx < tab_count {
+                                  if let Some(wid) = id {
+                                       return Some(HitTestResult { widget, action: format!("{}:tab:{}", wid, idx) });
+                                  }
+                              }
+                          }
+                      }
+                      crate::widget::Orientation::Vertical => {
+                          if point.x >= bounds.x && point.x <= bounds.x + header_w {
+                              let local_y = point.y - bounds.y;
+                              let tab_h = 32.0;
+                              let idx = (local_y / tab_h) as usize;
+                              if idx < tab_count {
+                                   if let Some(wid) = id {
+                                        return Some(HitTestResult { widget, action: format!("{}:tab:{}", wid, idx) });
+                                   }
+                              }
+                          }
+                      }
+                  }
+             }
+
+             // Check Content
+             if let Some(tab) = tabs.get(*selected) {
+                 if let Some(res) = hit_test(&tab.content, point, interaction) {
+                     return Some(res);
+                 }
+             }
+             
+             None
+        } else {
+             None
+        }
+    }
     _ => None,
   }
 }
@@ -2357,6 +2472,13 @@ pub fn find_widget_mut<'a>(root: &'a mut Widget, id: &str) -> Option<&'a mut Wid
                 }
             }
         },
+        Widget::Tab { tabs, selected, .. } => {
+            if let Some(tab) = tabs.get_mut(*selected) {
+                 if let Some(w) = find_widget_mut(&mut tab.content, id) {
+                     return Some(w);
+                 }
+            }
+        },
         _ => {}
     }
     None
@@ -2379,6 +2501,13 @@ fn collect_focusable_ids_recursive(widget: &Widget, ids: &mut Vec<String>) {
     if let Widget::Container { children, .. } = widget {
         for child in children {
             collect_focusable_ids_recursive(child, ids);
+        }
+    }
+    
+    // If Tab, recurse into selected content
+    if let Widget::Tab { tabs, selected, .. } = widget {
+        if let Some(tab) = tabs.get(*selected) {
+            collect_focusable_ids_recursive(&tab.content, ids);
         }
     }
 }
@@ -2407,6 +2536,29 @@ pub fn handle_interactions(
     }
 
     match widget {
+        Widget::Tab { id: wid, selected, tabs, .. } => {
+             if let Some(ref clicked) = ctx.clicked_id {
+                 if let Some(wid) = wid {
+                     let prefix = format!("{}:tab:", wid);
+                     if clicked.starts_with(&prefix) {
+                         if let Ok(idx) = clicked[prefix.len()..].parse::<usize>() {
+                             if idx < tabs.len() && *selected != idx {
+                                 *selected = idx;
+                                 changed = true;
+                             }
+                         }
+                     }
+                 }
+             }
+             // Recurse into selected content
+             if let Some(tab) = tabs.get_mut(*selected) {
+                 let content_offset = Vec2::ZERO; // Layout already positioned it relatively
+                 if handle_interactions(&mut tab.content, ctx, offset + content_offset) {
+                     changed = true;
+                 }
+             }
+        }
+
         Widget::Container { children, bounds, padding, id, scrollable, .. } => {
             let my_pos = offset + Vec2::new(bounds.x, bounds.y);
             
