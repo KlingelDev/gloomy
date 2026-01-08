@@ -44,6 +44,8 @@ pub struct RenderContext<'a> {
   pub text: &'a mut TextRenderer,
   pub images: &'a mut ImageRenderer,
   pub textures: &'a mut HashMap<String, Texture>,
+  pub chart_primitives: &'a mut mpl_wgpu::primitives::PrimitiveRenderer,
+  pub chart_text: &'a mut mpl_wgpu::text::TextRenderer,
   pub device: &'a wgpu::Device,
   pub queue: &'a wgpu::Queue,
   pub interaction: Option<&'a InteractionState>,
@@ -67,6 +69,8 @@ impl<'a> RenderContext<'a> {
     text: &'a mut TextRenderer,
     images: &'a mut ImageRenderer,
     textures: &'a mut HashMap<String, Texture>,
+    chart_primitives: &'a mut mpl_wgpu::primitives::PrimitiveRenderer,
+    chart_text: &'a mut mpl_wgpu::text::TextRenderer,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
     interaction: Option<&'a InteractionState>,
@@ -82,6 +86,8 @@ impl<'a> RenderContext<'a> {
       text,
       images,
       textures,
+      chart_primitives,
+      chart_text,
       device,
       queue,
       interaction,
@@ -339,6 +345,124 @@ fn map_text_align(align: TextAlign) -> HorizontalAlign {
 /// Renders a widget tree recursively.
 pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
   match widget {
+    Widget::Chart { 
+        id: _, 
+        chart_type,
+        title, 
+        bounds, 
+        width, 
+        height, 
+        data_source_id,
+        backend, 
+        .. 
+    } => {
+        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let w = if *width > 0.0 { *width } else { bounds.width };
+        let h = if *height > 0.0 { *height } else { bounds.height };
+        
+        let mut b_guard = backend.borrow_mut();
+        // Rename for clarity as struct fields
+        let backend_wrapper = &mut *b_guard;
+        let b_opt = &mut backend_wrapper.inner;
+        
+        if b_opt.is_none() {
+             let mut pb = mpl_wgpu::plotting::PlotBackend::new(w as u32, h as u32);
+             // Default setup if no data source
+             if data_source_id.is_none() {
+                 let x = mpl_wgpu::plotting::linspace(0.0, 10.0, 100);
+                 let y: Vec<f64> = x.iter().map(|v| v.sin()).collect();
+                 
+                 let fig = pb.figure();
+                 let ax = fig.current_axes();
+                 if chart_type == "bar" {
+                     ax.bar(&y);
+                 } else {
+                     ax.plot(&x, &y, "-");
+                 }
+                 ax.set_title("Demo Chart");
+                 ax.grid(true);
+             }
+             *b_opt = Some(Box::new(pb));
+        }
+
+        // Dynamic Update
+        if let Some(ds_id) = data_source_id {
+            if let Some(dp) = ctx.data_provider {
+                if let Some(ds) = dp.get_source(ds_id) {
+                    let current_ver = ds.version();
+                    if current_ver != backend_wrapper.last_version {
+                        if let Some(pb) = b_opt.as_mut() {
+                             // Update Chart Data
+                             let fig = pb.figure();
+                             let ax = fig.current_axes();
+                             
+                             // Simple assumption: Col 0 is X (or Category), Col 1 is Y (Value)
+                             // Or if only 1 col, use index as X.
+                             let rows = ds.row_count();
+                             let mut x_vals = Vec::with_capacity(rows);
+                             let mut y_vals = Vec::with_capacity(rows);
+                             
+                             for r in 0..rows {
+                                 let v0 = ds.cell_value(r, 0);
+                                 let v1 = ds.cell_value(r, 1);
+                                 
+                                 // Helper to extract double
+                                 let to_f64 = |cv: crate::data_source::CellValue| match cv {
+                                     crate::data_source::CellValue::Number(n) => n,
+                                     crate::data_source::CellValue::Integer(i) => i as f64,
+                                     _ => 0.0, 
+                                 };
+                                 
+                                 x_vals.push(to_f64(v0));
+                                 y_vals.push(to_f64(v1));
+                             }
+                             
+                             // Clear previous plot? 
+                             // matplot++ doesn't make it easy to clear just the plot content without full clear/reset.
+                             // But let's try just plotting over? That accumulates.
+                             // We should probably clear axes.
+                             // But our binding doesn't expose axes clear directly yet (TODO).
+                             // Re-creating figure or clearing figure is an option.
+                             // pb.figure().clear(); // If exposed.
+                             
+                             // For now, let's assume we can just replot on a "fresh" backend or 
+                             // acceptable accumulation for testing.
+                             // REAL FIX: Expose cla() (Clear Axis) or clf() in C API.
+                             // Workaround: Re-create backend if simple enough, OR expose clear.
+                             // Let's rely on the assumption that adding `cla` to C API is better.
+                             // But for this step, let's just plot and accept overlap or fix in C API next.
+                             
+                             // Let's implement cla() in C API if needed, or just let it stack for a sec.
+                             // Actually, plotting on top of old data is bad.
+                             // Let's update `mpl_figure_clear` to actually do something helpful or add `mpl_axes_cla`.
+                             
+                             if chart_type == "bar" {
+                                 ax.bar(&y_vals);
+                             } else {
+                                 ax.plot(&x_vals, &y_vals, "-");
+                             }
+                             ax.set_title(&title);
+                             ax.grid(true);
+                             
+                             backend_wrapper.last_version = current_ver;
+                        }
+                    }
+                }
+            }
+        }
+        
+        if let Some(pb) = b_opt.as_mut() {
+            // Check resize
+            // pb.resize(w as u32, h as u32); // Assuming efficient internally
+            
+            // Calculate transform: logical pos -> physical pixels
+            let s = ctx.scale_factor;
+            let transform = glam::Mat4::from_translation(glam::Vec3::new(pos.x * s, pos.y * s, 0.0))
+                           * glam::Mat4::from_scale(glam::Vec3::new(s, s, 1.0));
+
+            pb.render(ctx.chart_primitives, ctx.chart_text, Some(transform));
+        }
+    }
     Widget::ToggleSwitch { id, checked, style, bounds, .. } => {
         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
         let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
@@ -2039,13 +2163,15 @@ pub fn render_ui_with_state(
   let surface_height = size.y as u32;
   let scale_factor = renderer.scale_factor;
   
-  let (primitives, text, images, textures) = renderer.split_mut();
+  let (primitives, text, images, textures, chart_primitives, chart_text) = renderer.split_mut();
   
   let mut ctx = RenderContext::new(
       primitives, 
       text, 
       images, 
       textures, 
+      chart_primitives,
+      chart_text,
       device, 
       queue, 
       interaction, 

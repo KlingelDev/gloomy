@@ -35,6 +35,9 @@ pub struct GloomyRenderer {
   overlay_text: TextRenderer,
   images: ImageRenderer,
   textures: HashMap<String, Texture>,
+  // mpl-wgpu renderers
+  pub chart_primitives: mpl_wgpu::primitives::PrimitiveRenderer,
+  pub chart_text: mpl_wgpu::text::TextRenderer,
   width: u32,
   height: u32,
   pub scale_factor: f32,
@@ -88,12 +91,17 @@ impl GloomyRenderer {
     
     let images = ImageRenderer::new(device, format, width, height);
 
+    let chart_primitives = mpl_wgpu::primitives::PrimitiveRenderer::new(device, format, width, height);
+    let chart_text = mpl_wgpu::text::TextRenderer::new(device, format, width, height, DEFAULT_FONT);
+
     Self {
       primitives,
       text,
       overlay_primitives,
       overlay_text,
       images,
+      chart_primitives,
+      chart_text,
       textures: HashMap::new(),
       width,
       height,
@@ -117,12 +125,17 @@ impl GloomyRenderer {
     let overlay_text = TextRenderer::new(device, format, width, height, font_bytes);
     let images = ImageRenderer::new(device, format, width, height);
 
+    let chart_primitives = mpl_wgpu::primitives::PrimitiveRenderer::new(device, format, width, height);
+    let chart_text = mpl_wgpu::text::TextRenderer::new(device, format, width, height, font_bytes);
+
     Self {
       primitives,
       text,
       overlay_primitives,
       overlay_text,
       images,
+      chart_primitives,
+      chart_text,
       textures: HashMap::new(),
       width,
       height,
@@ -146,7 +159,12 @@ impl GloomyRenderer {
     self.overlay_primitives.resize(queue, width, height, scale_factor);
     self.text.resize(queue, width, height, scale_factor);
     self.overlay_text.resize(queue, width, height, scale_factor);
+    self.overlay_text.resize(queue, width, height, scale_factor);
     self.images.resize(queue, width, height);
+    self.chart_primitives.resize(queue, width, height); // No scale factor arg in mpl-wgpu yet? Check mpl-wgpu api. 
+    // mpl-wgpu primitives resize(queue, width, height). It does not take scale factor.
+    self.chart_text.resize(queue, width, height); // Same for text
+
   }
 
   /// Returns the current viewport size (Logical).
@@ -221,6 +239,8 @@ impl GloomyRenderer {
     self.primitives.prepare(device, queue);
     self.overlay_primitives.prepare(device, queue);
     self.images.prepare(device, queue);
+    self.chart_primitives.prepare(device, queue);
+    self.chart_text.prepare(device, queue);
   }
 
   /// Renders a frame to the given texture view.
@@ -248,6 +268,9 @@ impl GloomyRenderer {
         occlusion_query_set: None,
       });
       self.primitives.render(&mut rp);
+      // Render charts on top of primitives but below images? Or mixed?
+      // Primitives usually background. Charts might need to be on top of bg primitives.
+      self.chart_primitives.render(&mut rp);
     }
 
     // Images pass (before text)
@@ -272,7 +295,32 @@ impl GloomyRenderer {
 
     // Text pass (now manages its own passes)
     // Text pass (now manages its own passes)
+    // Text pass (now manages its own passes)
     self.text.render(encoder, view, device, queue);
+    
+    // mpl-wgpu Text Render (manages its own pass? check implementation)
+    // mpl-wgpu text renderer render() takes &mut RenderPass in its source?
+    // Let's check primitives.rs (step 18). primitives::PrimitiveRenderer::render(&self, &mut RenderPass).
+    // Let's check text.rs. Step 37 warnings imply: `pub fn render<'a>(&'a mut self, rpass: &mut wgpu::RenderPass<'a>)`.
+    // So it needs a render pass.
+    
+    {
+         let mut rp = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("GloomyChartTextPass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        self.chart_text.render(&mut rp);
+    }
     
     // --- Overlay Primitives Pass ---
     {
@@ -298,8 +346,16 @@ impl GloomyRenderer {
   }
 
   /// Splits renderer to access main layers mutably
-  pub fn split_mut(&mut self) -> (&mut PrimitiveRenderer, &mut TextRenderer, &mut ImageRenderer, &mut HashMap<String, Texture>) {
-      (&mut self.primitives, &mut self.text, &mut self.images, &mut self.textures)
+  /// Splits renderer to access main layers mutably
+  pub fn split_mut(&mut self) -> (
+      &mut PrimitiveRenderer,
+      &mut TextRenderer,
+      &mut ImageRenderer,
+      &mut HashMap<String, Texture>,
+      &mut mpl_wgpu::primitives::PrimitiveRenderer,
+      &mut mpl_wgpu::text::TextRenderer
+  ) {
+      (&mut self.primitives, &mut self.text, &mut self.images, &mut self.textures, &mut self.chart_primitives, &mut self.chart_text)
   }
 
   /// Splits renderer to access overlay layers mutably

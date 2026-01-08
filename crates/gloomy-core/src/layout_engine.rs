@@ -518,6 +518,7 @@ fn get_flex(widget: &Widget) -> f32 {
     Widget::KpiCard { flex, .. } => *flex,
     Widget::ListView { flex, .. } => *flex,
     Widget::Tab { flex, .. } => *flex,
+    Widget::Chart { flex, .. } => *flex,
   }
 }
 
@@ -668,6 +669,11 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
     Widget::Tree { bounds, .. } => (bounds.width, bounds.height),
     Widget::KpiCard { bounds, .. } => (bounds.width, bounds.height),
     Widget::Tab { bounds, .. } => (bounds.width, bounds.height),
+    Widget::Chart { bounds, width, height, .. } => {
+        let w = if *width > 0.0 { *width } else { 400.0 };
+        let h = if *height > 0.0 { *height } else { 300.0 };
+        (w, h)
+    },
   }
 }
 
@@ -782,6 +788,10 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
         bounds.width = w;
         bounds.height = h;
     }
+    Widget::Chart { bounds, .. } => {
+        bounds.width = w;
+        bounds.height = h;
+    }
   }
 }
 
@@ -877,6 +887,10 @@ fn set_pos(widget: &mut Widget, x: f32, y: f32) {
         bounds.x = x;
         bounds.y = y;
     }
+    Widget::Chart { bounds, .. } => {
+        bounds.x = x;
+        bounds.y = y;
+    }
   }
 }
 
@@ -907,6 +921,7 @@ fn get_grid_col(widget: &Widget) -> usize {
     Widget::KpiCard { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::ListView { grid_col, .. } => grid_col.unwrap_or(0),
     Widget::Tab { grid_col, .. } => grid_col.unwrap_or(0),
+    Widget::Chart { grid_col, .. } => grid_col.unwrap_or(0),
   }
 }
 
@@ -936,6 +951,7 @@ fn get_grid_row(widget: &Widget) -> usize {
     Widget::KpiCard { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::ListView { grid_row, .. } => grid_row.unwrap_or(0),
     Widget::Tab { grid_row, .. } => grid_row.unwrap_or(0),
+    Widget::Chart { grid_row, .. } => grid_row.unwrap_or(0),
   }
 }
 
@@ -966,6 +982,7 @@ fn get_explicit_grid_col(widget: &Widget) -> Option<usize> {
     Widget::KpiCard { grid_col, .. } => *grid_col,
     Widget::ListView { grid_col, .. } => *grid_col,
     Widget::Tab { grid_col, .. } => *grid_col,
+    Widget::Chart { grid_col, .. } => *grid_col,
   }
 }
 
@@ -995,6 +1012,7 @@ fn get_explicit_grid_row(widget: &Widget) -> Option<usize> {
     Widget::KpiCard { grid_row, .. } => *grid_row,
     Widget::ListView { grid_row, .. } => *grid_row,
     Widget::Tab { grid_row, .. } => *grid_row,
+    Widget::Chart { grid_row, .. } => *grid_row,
   }
 }
 
@@ -1025,6 +1043,7 @@ fn get_col_span(widget: &Widget) -> usize {
     Widget::KpiCard { col_span, .. } => *col_span,
     Widget::ListView { col_span, .. } => *col_span,
     Widget::Tab { col_span, .. } => *col_span,
+    Widget::Chart { col_span, .. } => *col_span,
   }
 }
 
@@ -1054,5 +1073,6 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::KpiCard { row_span, .. } => *row_span,
     Widget::ListView { row_span, .. } => *row_span,
     Widget::Tab { row_span, .. } => *row_span,
+    Widget::Chart { row_span, .. } => *row_span,
   }
 }

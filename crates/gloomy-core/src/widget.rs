@@ -761,6 +761,75 @@ pub enum Widget {
     #[serde(default = "default_span_one")]
     row_span: usize,
   },
+
+
+
+  /// Chart widget using mpl-wgpu.
+  Chart {
+    #[serde(default)]
+    id: Option<String>,
+    #[serde(default)]
+    chart_type: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    data_source_id: Option<String>,
+    
+    #[serde(default)]
+    bounds: WidgetBounds,
+    #[serde(default)]
+    width: f32,
+    #[serde(default)]
+    height: f32,
+    #[serde(default)]
+    flex: f32,
+    #[serde(default)]
+    grid_col: Option<usize>,
+    #[serde(default)]
+    grid_row: Option<usize>,
+    #[serde(default = "default_span_one")]
+    col_span: usize,
+    #[serde(default = "default_span_one")]
+    row_span: usize,
+
+    #[serde(skip)]
+    // We wrap in RefCell to allow mutation during rendering (draw calls)
+    backend: RefCell<GloomyPlotBackend>,
+  },
+}
+
+// Wrapper for PlotBackend to handle Clone/Debug/Serde
+#[derive(Default)]
+pub struct GloomyPlotBackend {
+    pub inner: Option<Box<mpl_wgpu::plotting::PlotBackend>>,
+    pub last_version: u64,
+}
+
+impl std::fmt::Debug for GloomyPlotBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PlotBackend(v{})", self.last_version)
+    }
+}
+
+impl Clone for GloomyPlotBackend {
+    fn clone(&self) -> Self {
+        Self { inner: None, last_version: 0 }
+    }
+}
+
+impl Serialize for GloomyPlotBackend {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        serializer.serialize_none()
+    }
+}
+
+impl<'de> Deserialize<'de> for GloomyPlotBackend {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        let _ = Option::<()>::deserialize(deserializer)?;
+        Ok(Self { inner: None, last_version: 0 })
+    }
 }
 
 /// Item representing a single tab.
@@ -974,6 +1043,7 @@ impl Widget {
           Widget::KpiCard { bounds, .. } => *bounds,
           Widget::ListView { bounds, .. } => *bounds,
           Widget::Tab { bounds, .. } => *bounds,
+          Widget::Chart { bounds, .. } => *bounds,
       }
   }
 
