@@ -36,11 +36,14 @@ gloomy-core = "0.1.0"
 
 ```rust
 use gloomy_app::GloomyApp;
-use gloomy_core::{Widget, layout::*, ui::*, Vec2};
+use gloomy_core::{Widget, layout::*, ui::*, Vec2, style::*};
 
 fn main() -> anyhow::Result<()> {
     let mut ui = Widget::Container {
-        background: Some((0.12, 0.12, 0.12, 1.0)),
+        style: BoxStyle {
+            background: Some((0.12, 0.12, 0.12, 1.0)),
+            ..Default::default()
+        },
         padding: 20.0,
         layout: Layout {
             direction: Direction::Column,
@@ -52,7 +55,13 @@ fn main() -> anyhow::Result<()> {
             Widget::Button {
                 text: "Click Me".to_string(),
                 action: "button_click".to_string(),
-                background: (0.3, 0.6, 1.0, 1.0),
+                style: ButtonStyle {
+                    idle: BoxStyle {
+                        background: Some((0.3, 0.6, 1.0, 1.0)),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         ],
@@ -179,27 +188,37 @@ Layout {
 
 ### Widget Styling
 
-All widgets support extensive styling options:
+All widgets support extensive styling options via their `style` field:
 
 ```rust
 Widget::Button {
-    background: (0.3, 0.6, 1.0, 1.0),
-    hover_color: (0.4, 0.7, 1.0, 1.0),
-    border: Some(Border {
-        width: 2.0,
-        color: (1.0, 1.0, 1.0, 0.3),
+    style: ButtonStyle {
+        idle: BoxStyle {
+            background: Some((0.3, 0.6, 1.0, 1.0)),
+            border: Some(Border {
+                width: 2.0,
+                color: (1.0, 1.0, 1.0, 0.3),
+                ..Default::default()
+            }),
+            corner_radii: [8.0; 4],
+            shadow: Some(Shadow {
+                offset: (0.0, 4.0),
+                blur: 8.0,
+                color: (0.0, 0.0, 0.0, 0.2),
+            }),
+            gradient: Some(Gradient {
+                start: (0.3, 0.6, 1.0, 1.0),
+                end: (0.2, 0.4, 0.8, 1.0),
+            }),
+            ..Default::default()
+        },
+        hover: BoxStyle {
+            background: Some((0.4, 0.7, 1.0, 1.0)),
+            corner_radii: [8.0; 4],
+            ..Default::default()
+        },
         ..Default::default()
-    }),
-    corner_radius: 8.0,
-    shadow: Some(Shadow {
-        offset: (0.0, 4.0),
-        blur: 8.0,
-        color: (0.0, 0.0, 0.0, 0.2),
-    }),
-    gradient: Some(Gradient {
-        start: (0.3, 0.6, 1.0, 1.0),
-        end: (0.2, 0.4, 0.8, 1.0),
-    }),
+    },
     ..Default::default()
 }
 ```
@@ -270,9 +289,16 @@ cargo test
 
 ## 📖 Documentation
 
-- [Examples README](examples/README.md) - Guide to all examples
-- [Architecture](docs/architecture.md) - System architecture
+- **[Widget Overview](docs/widgets/overview.md)** - List of all available widgets
+  - [Tab Widget](docs/widgets/tab.md)
+  - [Tree Widget](docs/widgets/tree.md)
+  - [DataGrid Widget](docs/datagrid.md)
+- **[Theming System](docs/theming.md)** - Using themes and semantic colors
+- **[Rich Text](docs/rich_text.md)** - Text formatting guide
+- **[Testing](docs/testing.md)** - Testing strategies and `gloomy-driver`
+- [Architecture](docs/architecture.md) - Internal design
 - [Roadmap](docs/roadmap.md) - Future plans
+- [Examples README](examples/README.md) - Guide to examples
 
 ## 🤝 Contributing
 
