@@ -258,6 +258,9 @@ pub enum Widget {
       col_span: usize,
       #[serde(default = "default_span_one")]
       row_span: usize,
+
+      #[serde(skip)]
+      scroll_offset: f32,
   },
 
   /// Tree Widget

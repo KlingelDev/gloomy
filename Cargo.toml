@@ -77,3 +77,7 @@ path = "examples/dashboard_demo.rs"
 [[example]]
 name = "ron_loader_demo"
 path = "examples/ron_loader_demo.rs"
+
+[[example]]
+name = "virtual_list"
+path = "examples/virtual_list.rs"

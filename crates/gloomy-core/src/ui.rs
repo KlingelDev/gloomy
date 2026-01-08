@@ -543,20 +543,47 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         ..
     } => {
          let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
+
+         // 1. Get Scroll Offset
+         let scroll_offset = ctx.interaction.as_ref()
+              .and_then(|i| i.scroll_offsets.get(id))
+              .map(|v| v.y)
+              .unwrap_or(0.0);
+
+         // 2. Set Scissor
+         let s = ctx.scale_factor;
+         let list_scissor = (
+              (pos.x * s).floor() as u32,
+              (pos.y * s).floor() as u32,
+              (bounds.width * s).ceil() as u32,
+              (bounds.height * s).ceil() as u32
+         );
+         ctx.push_scissor(Some(list_scissor));
+         
+         // 3. Calculate visible range
+         let item_h = style.item_height;
+         let start_index = (scroll_offset / item_h).floor() as usize;
+         let visible_count = (bounds.height / item_h).ceil() as usize;
+         // Add buffer
+         let buffer = 2;
+         let start_index = start_index.saturating_sub(buffer);
+         let end_index = (start_index + visible_count + buffer * 2).min(items.len());
+
          let mouse_pos = ctx.interaction.map(|s| s.mouse_pos).unwrap_or(Vec2::ZERO);
-         let local_mouse_y = mouse_pos.y - pos.y;
+         let local_mouse_y = mouse_pos.y - pos.y + scroll_offset;
          let hover_index = if mouse_pos.x >= pos.x && mouse_pos.x <= pos.x + bounds.width 
              && mouse_pos.y >= pos.y && mouse_pos.y <= pos.y + bounds.height 
          {
-             Some((local_mouse_y / style.item_height) as usize)
+             Some((local_mouse_y / item_h) as usize)
          } else {
              None
          };
          
-         for (i, item) in items.iter().enumerate() {
-             let item_y = pos.y + i as f32 * style.item_height;
-             let item_rect_pos = Vec2::new(pos.x + bounds.width * 0.5, item_y + style.item_height * 0.5);
-             let item_size = Vec2::new(bounds.width, style.item_height);
+         for i in start_index..end_index {
+             let item = &items[i];
+             let item_y = pos.y + i as f32 * item_h - scroll_offset;
+             let item_rect_pos = Vec2::new(pos.x + bounds.width * 0.5, item_y + item_h * 0.5);
+             let item_size = Vec2::new(bounds.width, item_h);
              
              let is_selected = selected_index.map(|si| si == i).unwrap_or(false);
              let is_hovered = hover_index.map(|hi| hi == i).unwrap_or(false);
@@ -573,7 +600,7 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
              if let Some(bg_color) = bg_style.background {
                   ctx.primitives.draw_rect(
                       item_rect_pos,
-                      item_size * 0.5, // draw_rect expects half-extents
+                      item_size * 0.5, 
                       Vec4::from(bg_color),
                       bg_style.corner_radii,
                       bg_style.border.map(|b| b.width).unwrap_or(0.0)
@@ -581,11 +608,44 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
              }
              
              // Draw Text
-             let text_pos = Vec2::new(pos.x + 12.0, item_y + style.item_height * 0.5 - 8.0); // Simple centering
+             let text_pos = Vec2::new(pos.x + 12.0, item_y + item_h * 0.5 - 8.0); 
              ctx.text.draw(
                  ctx.device, ctx.queue, item, text_pos, 16.0, 
                  Vec4::from(text_color), HorizontalAlign::Left, None
              );
+         }
+         
+         ctx.pop_scissor();
+
+         // 4. Draw Scrollbar
+         let content_height = items.len() as f32 * item_h;
+         if content_height > bounds.height {
+              let track_w = 10.0;
+              let track_h = bounds.height;
+              let track_x = pos.x + bounds.width - track_w;
+              let track_y = pos.y;
+              
+              // Track
+              ctx.primitives.draw_rect(
+                  Vec2::new(track_x + track_w * 0.5, track_y + track_h * 0.5),
+                  Vec2::new(track_w * 0.5, track_h * 0.5),
+                  Vec4::new(0.0, 0.0, 0.0, 0.2), 
+                  [4.0; 4], 0.0
+              );
+              
+              // Thumb
+              let thumb_h = (bounds.height / content_height * track_h).max(20.0);
+              let max_scroll = content_height - bounds.height;
+              let scroll_ratio = if max_scroll > 0.0 { (scroll_offset / max_scroll).clamp(0.0, 1.0) } else { 0.0 };
+              let thumb_offset = scroll_ratio * (track_h - thumb_h);
+              let thumb_y = track_y + thumb_offset;
+              
+              ctx.primitives.draw_rect(
+                  Vec2::new(track_x + track_w * 0.5, thumb_y + thumb_h * 0.5),
+                  Vec2::new(track_w * 0.5 - 2.0, thumb_h * 0.5), 
+                  Vec4::new(0.5, 0.5, 0.5, 0.8),
+                  [3.0; 4], 0.0
+              );
          }
     }
 
@@ -2114,13 +2174,18 @@ pub fn hit_test<'a>(
         if point.x >= bounds.x && point.x <= bounds.x + bounds.width
            && point.y >= bounds.y && point.y <= bounds.y + bounds.height 
         {
-             let local_y = point.y - bounds.y;
+             let scroll_y = if let Some(state) = interaction {
+                  state.scroll_offsets.get(id).map(|v| v.y).unwrap_or(0.0)
+             } else { 0.0 };
+             
+             let local_y = point.y - bounds.y + scroll_y;
              let index = (local_y / style.item_height) as usize;
+             
              if index < items.len() {
                  let action = format!("{}:{}", id, index);
                  Some(HitTestResult { widget, action })
              } else {
-                 None
+                 Some(HitTestResult { widget, action: id.clone() })
              }
         } else {
             None
