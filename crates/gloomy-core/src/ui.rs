@@ -119,6 +119,8 @@ impl<'a> RenderContext<'a> {
                   } else {
                       self.current_scissor = Some((0, 0, 0, 0));
                   }
+              } else {
+                  self.current_scissor = Some(r);
               }
           }
           
