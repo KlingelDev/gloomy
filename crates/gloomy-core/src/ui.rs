@@ -2643,38 +2643,52 @@ pub fn hit_test<'a>(
 }
 
 // Helper to find a widget by ID (or Action) and return mutable access.
-// Recursive search.
-pub fn find_widget_mut<'a>(root: &'a mut Widget, id: &str) -> Option<&'a mut Widget> {
-    match root {
-        Widget::TextInput { id: w_id, .. } 
-        | Widget::Button { action: w_id, .. } 
-        | Widget::Checkbox { id: w_id, .. } 
-        | Widget::Slider { id: w_id, .. } 
-        | Widget::NumberInput { id: w_id, .. }
-        | Widget::Autocomplete { id: w_id, .. }
-        | Widget::DatePicker { id: w_id, .. }
-        | Widget::ToggleSwitch { id: w_id, .. } => {
-            if w_id == id {
-                return Some(root);
-            }
-        },
-        Widget::Container { children, .. } => {
-            for child in children.iter_mut() {
-                if let Some(w) = find_widget_mut(child, id) {
-                    return Some(w);
-                }
-            }
-        },
-        Widget::Tab { tabs, selected, .. } => {
-            if let Some(tab) = tabs.get_mut(*selected) {
-                 if let Some(w) = find_widget_mut(&mut tab.content, id) {
-                     return Some(w);
-                 }
-            }
-        },
-        _ => {}
+// Recursive search. Two-phase approach: check self first via shared
+// borrow, then recurse via exclusive borrow.
+pub fn find_widget_mut<'a>(
+  root: &'a mut Widget,
+  id: &str,
+) -> Option<&'a mut Widget> {
+  // Phase 1: check whether this node itself matches.
+  let is_match = match &*root {
+    Widget::TextInput { id: w_id, .. }
+    | Widget::Checkbox { id: w_id, .. }
+    | Widget::Slider { id: w_id, .. }
+    | Widget::NumberInput { id: w_id, .. }
+    | Widget::Autocomplete { id: w_id, .. }
+    | Widget::DatePicker { id: w_id, .. }
+    | Widget::ToggleSwitch { id: w_id, .. } => w_id == id,
+    Widget::Button { action: w_id, .. } => w_id == id,
+    Widget::Container { id: cid, .. } => {
+      cid.as_deref() == Some(id)
     }
-    None
+    _ => false,
+  };
+  if is_match {
+    return Some(root);
+  }
+
+  // Phase 2: recurse into children.
+  match root {
+    Widget::Container { children, .. } => {
+      for child in children.iter_mut() {
+        if let Some(w) = find_widget_mut(child, id) {
+          return Some(w);
+        }
+      }
+    }
+    Widget::Tab { tabs, selected, .. } => {
+      if let Some(tab) = tabs.get_mut(*selected) {
+        if let Some(w) =
+          find_widget_mut(&mut tab.content, id)
+        {
+          return Some(w);
+        }
+      }
+    }
+    _ => {}
+  }
+  None
 }
 
 /// Collects all focusable IDs from the widget tree in depth-first order.

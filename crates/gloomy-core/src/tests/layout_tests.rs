@@ -156,8 +156,151 @@ fn test_flex_row_distribution() {
 }
 
 fn get_bounds(w: &Widget) -> WidgetBounds {
-    match w {
-        Widget::Container { bounds, .. } => *bounds,
-        _ => panic!("Not a container"),
+  match w {
+    Widget::Container { bounds, .. } => *bounds,
+    _ => panic!("Not a container"),
+  }
+}
+
+fn make_grid_cell(w: f32, h: f32) -> Widget {
+  Widget::Container {
+    id: None,
+    style: BoxStyle::default(),
+    width: Some(w),
+    height: Some(h),
+    layout: Layout::default(),
+    children: vec![],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  }
+}
+
+// Regression: get_fixed_size for Grid must sum row heights, not take max.
+// A 2-column grid with 4 cells of height=50 has 2 rows; intrinsic
+// height must be 100, not 50.
+#[test]
+fn test_grid_intrinsic_height_sums_rows() {
+  let grid = Widget::Container {
+    id: Some("grid".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Grid { columns: 2 },
+      spacing: 0.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(100.0, 50.0),
+      make_grid_cell(100.0, 50.0),
+      make_grid_cell(100.0, 50.0),
+      make_grid_cell(100.0, 50.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![grid],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    if let Widget::Container { bounds, .. } = &children[0] {
+      assert_eq!(
+        bounds.height,
+        100.0,
+        "Grid height must sum row heights (2 rows × 50 = 100)"
+      );
+    } else {
+      panic!("grid child is not a container");
     }
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Regression: Spacer set_size must not overwrite declared size with
+// cross-axis value when parent uses Align::Stretch.
+#[test]
+fn test_spacer_size_preserved_with_stretch_align() {
+  let spacer = Widget::Spacer {
+    size: 20.0,
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Stretch,
+      ..Default::default()
+    },
+    children: vec![spacer],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  let result = test_layout(root, 500.0, 300.0);
+  if let Widget::Container { children, .. } = result {
+    if let Widget::Spacer { size, .. } = &children[0] {
+      assert_eq!(
+        *size,
+        20.0,
+        "Spacer declared size must not be corrupted by Stretch cross-axis"
+      );
+    } else {
+      panic!("expected a Spacer widget");
+    }
+  } else {
+    panic!("root is not a container");
+  }
 }
