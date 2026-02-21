@@ -599,8 +599,8 @@ mod tests {
 
     let child = &info.children[0];
     assert_eq!(child.widget_type, "Button");
-    // Button has no id in widget_id() — documents the limitation.
-    assert_eq!(child.id, None);
+    // widget_id() returns the action field for Button.
+    assert_eq!(child.id.as_deref(), Some("act"));
     assert_eq!(child.children.len(), 0);
   }
 
