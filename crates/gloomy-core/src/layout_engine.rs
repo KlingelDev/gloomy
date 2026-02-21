@@ -561,51 +561,74 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
             let num_rows =
               (children.len() + cols - 1) / cols;
             let mut row_heights = vec![0.0f32; num_rows];
+            let mut max_col_w = 0.0f32;
             for (i, child) in children.iter().enumerate() {
               let row = i / cols;
               let (cw, ch) = get_fixed_size(child);
               row_heights[row] = row_heights[row].max(ch);
-              if w <= 0.0 {
-                // Also track max column width.
-                w = w.max(cw);
-              }
+              max_col_w = max_col_w.max(cw);
             }
             if w <= 0.0 {
-              w = w * cols as f32
-                + if cols > 1 {
-                    (cols - 1) as f32 * layout.spacing
-                  } else {
-                    0.0
-                  }
-                + padding * 2.0;
+              let spacing = if cols > 1 {
+                (cols - 1) as f32 * layout.spacing
+              } else {
+                0.0
+              };
+              w = max_col_w * cols as f32
+                + spacing + padding * 2.0;
             }
             if h <= 0.0 {
+              let spacing = if num_rows > 1 {
+                (num_rows - 1) as f32 * layout.spacing
+              } else {
+                0.0
+              };
               h = row_heights.iter().sum::<f32>()
-                + if num_rows > 1 {
-                    (num_rows - 1) as f32 * layout.spacing
-                  } else {
-                    0.0
-                  }
-                + padding * 2.0;
+                + spacing + padding * 2.0;
             }
           }
-        } else {
-          // Non-grid: max of children (existing logic).
-          if w <= 0.0 && !children.is_empty() {
-            let mut max_w = 0.0f32;
-            for child in children {
-              let (cw, _) = get_fixed_size(child);
-              max_w = max_w.max(cw);
+        } else if !children.is_empty() {
+          // Row: sum widths, max height.
+          // Column: max width, sum heights.
+          // None/other: max of both.
+          let is_row = matches!(
+            layout.direction, Direction::Row
+          );
+          let is_col = matches!(
+            layout.direction, Direction::Column
+          );
+          let count = children.len();
+          let spacing = if count > 1 {
+            (count - 1) as f32 * layout.spacing
+          } else {
+            0.0
+          };
+
+          if w <= 0.0 {
+            if is_row {
+              let sum: f32 = children.iter()
+                .map(|c| get_fixed_size(c).0)
+                .sum();
+              w = sum + spacing + padding * 2.0;
+            } else {
+              let max_w: f32 = children.iter()
+                .map(|c| get_fixed_size(c).0)
+                .fold(0.0f32, f32::max);
+              w = max_w + padding * 2.0;
             }
-            w = max_w + padding * 2.0;
           }
-          if h <= 0.0 && !children.is_empty() {
-            let mut max_h = 0.0f32;
-            for child in children {
-              let (_, ch) = get_fixed_size(child);
-              max_h = max_h.max(ch);
+          if h <= 0.0 {
+            if is_col {
+              let sum: f32 = children.iter()
+                .map(|c| get_fixed_size(c).1)
+                .sum();
+              h = sum + spacing + padding * 2.0;
+            } else {
+              let max_h: f32 = children.iter()
+                .map(|c| get_fixed_size(c).1)
+                .fold(0.0f32, f32::max);
+              h = max_h + padding * 2.0;
             }
-            h = max_h + padding * 2.0;
           }
         }
 

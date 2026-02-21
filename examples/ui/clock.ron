@@ -1,4 +1,4 @@
-// Clock + Calendar — kitty theme palette
+// Clock + Calendar — kitty theme palette (linear color space)
 Container(
   style: (),
   padding: 40.0,
@@ -22,18 +22,9 @@ Container(
       children: [
         // Time (updated each frame)
         Label(
-          text: "00:00",
+          text: "<b>00:00</b>",
           size: 96.0,
-          color: (0.694, 0.910, 0.412, 1.0),
-          text_align: Center,
-          font: Some("FiraMono"),
-        ),
-        Spacer(size: 8.0),
-        // Date (updated each frame)
-        Label(
-          text: "Saturday, February 21",
-          size: 20.0,
-          color: (0.620, 0.620, 0.620, 1.0),
+          color: (0.439, 0.807, 0.141, 1.0),
           text_align: Center,
           font: Some("FiraMono"),
         ),
@@ -44,7 +35,7 @@ Container(
     Container(
       width: Some(1.0),
       style: (
-        background: Some((0.149, 0.149, 0.149, 1.0)),
+        background: Some((0.019, 0.019, 0.019, 1.0)),
       ),
     ),
 
@@ -55,7 +46,7 @@ Container(
       layout: (
         direction: Column,
         spacing: 0.0,
-        align_items: Stretch,
+        align_items: Center,
         justify_content: Center,
       ),
       children: [
@@ -63,7 +54,7 @@ Container(
         Container(
           layout: (
             direction: Row,
-            spacing: 12.0,
+            spacing: 8.0,
             align_items: Center,
             justify_content: Center,
           ),
@@ -71,64 +62,76 @@ Container(
             Button(
               text: "<",
               action: "prev_month",
-              width: Some(36.0),
-              height: Some(32.0),
+              width: Some(28.0),
+              height: Some(24.0),
               font: Some("FiraMono"),
               style: (
                 idle: (
-                  background:
-                    Some((0.180, 0.180, 0.180, 1.0)),
+                  border: Some((
+                    width: 1.0,
+                    color: (0.342, 0.342, 0.342, 1.0),
+                  )),
                   corner_radii: (4.0, 4.0, 4.0, 4.0),
                 ),
                 hover: (
-                  background:
-                    Some((0.250, 0.250, 0.250, 1.0)),
+                  border: Some((
+                    width: 1.0,
+                    color: (0.523, 0.523, 0.523, 1.0),
+                  )),
                   corner_radii: (4.0, 4.0, 4.0, 4.0),
                 ),
                 active: (
-                  background:
-                    Some((0.130, 0.130, 0.130, 1.0)),
+                  border: Some((
+                    width: 1.0,
+                    color: (0.342, 0.342, 0.342, 1.0),
+                  )),
                   corner_radii: (4.0, 4.0, 4.0, 4.0),
                 ),
-                text_color: (0.600, 0.855, 0.239, 1.0),
+                text_color: (0.982, 0.973, 0.973, 1.0),
               ),
             ),
             Label(
               text: "February 2026",
-              size: 22.0,
-              color: (0.976, 0.796, 0.322, 1.0),
+              size: 16.0,
+              color: (0.982, 0.973, 0.973, 1.0),
               text_align: Center,
-              width: 180.0,
+              width: 160.0,
               font: Some("FiraMono"),
             ),
             Button(
               text: ">",
               action: "next_month",
-              width: Some(36.0),
-              height: Some(32.0),
+              width: Some(28.0),
+              height: Some(24.0),
               font: Some("FiraMono"),
               style: (
                 idle: (
-                  background:
-                    Some((0.180, 0.180, 0.180, 1.0)),
+                  border: Some((
+                    width: 1.0,
+                    color: (0.342, 0.342, 0.342, 1.0),
+                  )),
                   corner_radii: (4.0, 4.0, 4.0, 4.0),
                 ),
                 hover: (
-                  background:
-                    Some((0.250, 0.250, 0.250, 1.0)),
+                  border: Some((
+                    width: 1.0,
+                    color: (0.523, 0.523, 0.523, 1.0),
+                  )),
                   corner_radii: (4.0, 4.0, 4.0, 4.0),
                 ),
                 active: (
-                  background:
-                    Some((0.130, 0.130, 0.130, 1.0)),
+                  border: Some((
+                    width: 1.0,
+                    color: (0.342, 0.342, 0.342, 1.0),
+                  )),
                   corner_radii: (4.0, 4.0, 4.0, 4.0),
                 ),
-                text_color: (0.600, 0.855, 0.239, 1.0),
+                text_color: (0.982, 0.973, 0.973, 1.0),
               ),
             ),
           ],
         ),
-        Spacer(size: 12.0),
+        Spacer(size: 6.0),
         // Calendar grid (populated dynamically)
         Container(
           id: Some("calendar_grid"),

@@ -44,6 +44,17 @@ fn cal_label(
   height: f32,
   color: (f32, f32, f32, f32),
 ) -> Widget {
+  cal_label_bg(text, size, height, color, None, [0.0; 4])
+}
+
+fn cal_label_bg(
+  text: &str,
+  size: f32,
+  height: f32,
+  color: (f32, f32, f32, f32),
+  background: Option<(f32, f32, f32, f32)>,
+  corner_radii: [f32; 4],
+) -> Widget {
   Widget::Label {
     text: text.to_string(),
     x: 0.0,
@@ -59,6 +70,8 @@ fn cal_label(
     col_span: 1,
     row_span: 1,
     font: Some("FiraMono".to_string()),
+    background,
+    corner_radii,
   }
 }
 
@@ -98,41 +111,14 @@ fn build_calendar_grid(
       && day == today.day();
 
     if is_today {
-      children.push(Widget::Container {
-        id: None,
-        scrollable: false,
-        bounds: Default::default(),
-        width: Some(36.0),
-        height: Some(28.0),
-        style: gloomy_core::style::BoxStyle {
-          background: Some(tomato),
-          corner_radii: [6.0; 4],
-          ..Default::default()
-        },
-        padding: 0.0,
-        layout: gloomy_core::layout::Layout {
-          direction:
-            gloomy_core::layout::Direction::Column,
-          align_items:
-            gloomy_core::layout::Align::Stretch,
-          justify_content:
-            gloomy_core::layout::Justify::Center,
-          ..Default::default()
-        },
-        flex: 0.0,
-        grid_col: None,
-        grid_row: None,
-        col_span: 1,
-        row_span: 1,
-        children: vec![cal_label(
-          &day.to_string(),
-          16.0,
-          20.0,
-          white,
-        )],
-        layout_cache: None,
-        render_cache: Default::default(),
-      });
+      children.push(cal_label_bg(
+        &day.to_string(),
+        16.0,
+        28.0,
+        white,
+        Some(tomato),
+        [6.0; 4],
+      ));
     } else {
       children.push(cal_label(
         &day.to_string(),
@@ -151,19 +137,16 @@ fn main() -> anyhow::Result<()> {
   let dm = now.month();
   let dy = now.year();
 
-  // Update clock labels.
+  // Update clock label (bold).
   if let Some(Widget::Container { children, .. }) =
     find_widget_mut(&mut ui, "clock_section")
   {
     if let Some(Widget::Label { text, .. }) =
       children.get_mut(0)
     {
-      *text = now.format("%H:%M").to_string();
-    }
-    if let Some(Widget::Label { text, .. }) =
-      children.get_mut(2)
-    {
-      *text = now.format("%A, %B %-d").to_string();
+      *text = format!(
+        "<b>{}</b>", now.format("%H:%M")
+      );
     }
   }
 

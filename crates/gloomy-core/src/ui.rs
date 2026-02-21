@@ -619,7 +619,38 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       *render_cache.borrow_mut() = Some(Box::new(new_cache));
     }
 
-    Widget::Label { text, x, y, size, color, text_align, width, height, font, .. } => {
+    Widget::Label { text, x, y, size, color, text_align, width, height, font, background, corner_radii, .. } => {
+      // Draw optional background pill centered on the text.
+      if let Some(bg) = background {
+        if bg.3 > 0.0 {
+          let pos = ctx.offset + Vec2::new(*x, *y);
+          // Get real font metrics so we know where glyphs
+          // actually sit. Text is drawn at pos.y; baseline
+          // is at pos.y + ascent. Numbers span pos.y to
+          // pos.y + ascent. Center a pill on that range.
+          let (ascent, descent) = ctx.text.font_metrics(
+            *size, font.as_deref(),
+          );
+          let glyph_top = pos.y;
+          let glyph_bot = pos.y + ascent - descent;
+          let glyph_mid = (glyph_top + glyph_bot) * 0.5;
+          let pad = 4.0;
+          let bg_h = (glyph_bot - glyph_top) + pad * 2.0;
+          let center = Vec2::new(
+            pos.x + *width * 0.5,
+            glyph_mid,
+          );
+          let half = Vec2::new(*width * 0.5, bg_h * 0.5);
+          ctx.primitives.draw_rect(
+            center,
+            half,
+            Vec4::from(*bg),
+            *corner_radii,
+            0.0,
+          );
+        }
+      }
+
       // Set scissor to clip text within label bounds
       let s = ctx.scale_factor;
       let scissor_x = ((ctx.offset.x + x) * s).max(0.0).floor() as u32;
@@ -632,7 +663,7 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
       } else {
         None
       };
-      
+
       let mut text_pos = ctx.offset + Vec2::new(*x, *y);
       if *text_align == TextAlign::Center {
           text_pos.x += width * 0.5;
@@ -640,7 +671,7 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
           text_pos.x += width;
       }
 
-      // Use rich text rendering (automatically handles markup)
+      // Same render path for all labels — no special casing.
       render_text_field(
         ctx,
         text,

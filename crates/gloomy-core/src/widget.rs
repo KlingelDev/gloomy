@@ -198,6 +198,10 @@ pub enum Widget {
     row_span: usize,
     #[serde(default)]
     font: Option<String>,
+    #[serde(default)]
+    background: Option<Color>,
+    #[serde(default)]
+    corner_radii: [f32; 4],
   },
 
   /// Interactive button widget.
@@ -1014,6 +1018,8 @@ impl Widget {
       col_span: 1,
       row_span: 1,
       font: None,
+      background: None,
+      corner_radii: [0.0; 4],
     }
   }
 
