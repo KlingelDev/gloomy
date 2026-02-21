@@ -513,4 +513,172 @@ mod tests {
       Some("root")
     );
   }
+
+  // 4×4 image, single cell_size=4 cell → region covers 16 pixels.
+  // 1 diff pixel = 6.25% → "medium"; 4 diff pixels = 25% → "high".
+  #[test]
+  fn severity_labels_medium_and_high() {
+    let a = solid_image(4, 4, [0, 0, 0, 255]);
+    let cfg = DiffConfig { cell_size: 4, ..Default::default() };
+
+    let mut b = a.clone();
+    b.put_pixel(0, 0, image::Rgba([255, 0, 0, 255]));
+    let r = compare_images(&a, &b, &cfg, None);
+    assert_eq!(r.regions[0].severity, "medium");
+
+    let mut b = a.clone();
+    for x in 0..4 {
+      b.put_pixel(x, 0, image::Rgba([255, 0, 0, 255]));
+    }
+    let r = compare_images(&a, &b, &cfg, None);
+    assert_eq!(r.regions[0].severity, "high");
+  }
+
+  // Sum of per-region diff_pixels must equal the global diff_pixels.
+  #[test]
+  fn region_diff_pixels_sum_equals_total() {
+    let a = solid_image(128, 128, [0, 0, 0, 255]);
+    let mut b = a.clone();
+    for y in 0..5 {
+      for x in 0..5 {
+        b.put_pixel(x, y, image::Rgba([255, 0, 0, 255]));
+      }
+    }
+    for y in 100..110 {
+      for x in 100..110 {
+        b.put_pixel(x, y, image::Rgba([0, 255, 0, 255]));
+      }
+    }
+    let r = compare_images(&a, &b, &DiffConfig::default(), None);
+    let sum: u64 = r.regions.iter().map(|rg| rg.diff_pixels).sum();
+    assert_eq!(sum, r.diff_pixels);
+  }
+
+  #[test]
+  fn collect_widgets_captures_tree() {
+    let mut root = Widget::container();
+    if let Widget::Container {
+      id, children, bounds, ..
+    } = &mut root
+    {
+      *id = Some("root".to_string());
+      bounds.width = 100.0;
+      bounds.height = 80.0;
+      *children = vec![Widget::Button {
+        text: "btn".to_string(),
+        action: "act".to_string(),
+        bounds: WidgetBounds {
+          x: 0.0,
+          y: 0.0,
+          width: 50.0,
+          height: 30.0,
+        },
+        style: Default::default(),
+        width: Some(50.0),
+        height: Some(30.0),
+        disabled: false,
+        layout: Default::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+        font: None,
+      }];
+    }
+
+    let info = collect_widgets(&root);
+    assert_eq!(info.widget_type, "Container");
+    assert_eq!(info.id.as_deref(), Some("root"));
+    assert_eq!(info.width, 100.0);
+    assert_eq!(info.height, 80.0);
+    assert_eq!(info.children.len(), 1);
+
+    let child = &info.children[0];
+    assert_eq!(child.widget_type, "Button");
+    // Button has no id in widget_id() — documents the limitation.
+    assert_eq!(child.id, None);
+    assert_eq!(child.children.len(), 0);
+  }
+
+  // Nested containers: the innermost widget with an id should win.
+  #[test]
+  fn find_deepest_widget_prefers_deepest_named() {
+    let toggle = Widget::ToggleSwitch {
+      id: "toggle".to_string(),
+      checked: false,
+      style: Default::default(),
+      bounds: WidgetBounds {
+        x: 30.0,
+        y: 30.0,
+        width: 20.0,
+        height: 20.0,
+      },
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+
+    let mut inner = Widget::container();
+    if let Widget::Container { id, children, bounds, .. } =
+      &mut inner
+    {
+      *id = Some("inner".to_string());
+      bounds.x = 20.0;
+      bounds.y = 20.0;
+      bounds.width = 60.0;
+      bounds.height = 60.0;
+      *children = vec![toggle];
+    }
+
+    let mut outer = Widget::container();
+    if let Widget::Container { id, children, bounds, .. } =
+      &mut outer
+    {
+      *id = Some("outer".to_string());
+      bounds.width = 100.0;
+      bounds.height = 100.0;
+      *children = vec![inner];
+    }
+
+    let a = solid_image(100, 100, [0, 0, 0, 255]);
+    let mut b = a.clone();
+    // Diff at (35, 35): inside toggle bounds.
+    b.put_pixel(35, 35, image::Rgba([255, 0, 0, 255]));
+
+    // cell_size=32 → diff pixel at (35,35) lands in cell (1,1),
+    // region x=32 y=32 w=32 h=32, center (48,48).
+    // (48,48) is inside toggle bounds [30..50, 30..50], so
+    // find_deepest_widget returns "toggle" over "inner".
+    let r = compare_images(
+      &a,
+      &b,
+      &DiffConfig { cell_size: 32, ..Default::default() },
+      Some(&outer),
+    );
+    assert_eq!(r.regions.len(), 1);
+    assert_eq!(
+      r.regions[0].widget_id.as_deref(),
+      Some("toggle")
+    );
+  }
+
+  // cell_size=0 is clamped to 1 internally; must not panic.
+  #[test]
+  fn cell_size_zero_does_not_panic() {
+    let a = solid_image(32, 32, [0, 0, 0, 255]);
+    let mut b = a.clone();
+    b.put_pixel(5, 5, image::Rgba([255, 0, 0, 255]));
+    let r = compare_images(
+      &a,
+      &b,
+      &DiffConfig { cell_size: 0, ..Default::default() },
+      None,
+    );
+    assert!(!r.passed);
+    assert_eq!(r.diff_pixels, 1);
+  }
 }

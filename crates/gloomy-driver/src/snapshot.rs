@@ -212,4 +212,50 @@ mod tests {
     let msg = format!("{:#}", result.unwrap_err());
     assert!(msg.contains("missing golden image"));
   }
+
+  #[test]
+  fn list_goldens_empty_when_dir_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mgr = SnapshotManager::new(dir.path());
+    let names = mgr.list_goldens().unwrap();
+    assert!(names.is_empty());
+  }
+
+  #[test]
+  fn list_goldens_returns_sorted_names() {
+    let dir = tempfile::tempdir().unwrap();
+    let mgr = SnapshotManager::new(dir.path());
+    let img = solid_image(4, 4, [0, 0, 0, 255]);
+    mgr.update_golden("c", &img).unwrap();
+    mgr.update_golden("a", &img).unwrap();
+    mgr.update_golden("b", &img).unwrap();
+    let names = mgr.list_goldens().unwrap();
+    assert_eq!(names, vec!["a", "b", "c"]);
+  }
+
+  // Changed pixels → magenta [255, 0, 255, 255].
+  // Unchanged pixels → 50% dimmed RGB, alpha preserved.
+  #[test]
+  fn save_diff_image_pixel_correctness() {
+    let dir = tempfile::tempdir().unwrap();
+    let mgr = SnapshotManager::new(dir.path());
+    let expected = solid_image(4, 4, [100, 100, 100, 200]);
+    let mut actual = expected.clone();
+    actual.put_pixel(0, 0, image::Rgba([200, 100, 100, 200]));
+
+    let config = DiffConfig::default();
+    let path = mgr
+      .save_diff_image("t", &expected, &actual, &config)
+      .unwrap();
+    let diff = image::open(&path).unwrap().to_rgba8();
+
+    // Pixel (0, 0) changed → magenta.
+    assert_eq!(diff.get_pixel(0, 0).0, [255, 0, 255, 255]);
+    // Pixel (1, 0) unchanged → 50% dim, alpha preserved.
+    let px = diff.get_pixel(1, 0).0;
+    assert_eq!(px[0], 50); // 100 / 2
+    assert_eq!(px[1], 50);
+    assert_eq!(px[2], 50);
+    assert_eq!(px[3], 200);
+  }
 }
