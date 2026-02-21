@@ -210,7 +210,8 @@ impl TextRenderer {
   }
   
   /// Creates a new text renderer with all available font families.
-  /// Loads: Inter (2), Roboto (4), RobotoCondensed (4) = 10 fonts total.
+  /// Loads: Inter (2), Roboto (4), RobotoCondensed (4),
+  /// FiraMono (2) = 12 fonts total.
   pub fn new_with_all_families(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
@@ -226,6 +227,8 @@ impl TextRenderer {
     roboto_condensed_bold: &[u8],
     roboto_condensed_italic: &[u8],
     roboto_condensed_bold_italic: &[u8],
+    fira_mono_regular: &[u8],
+    fira_mono_bold: &[u8],
   ) -> Self {
     let mut all_fonts = Vec::new();
     let mut font_registry = FontRegistry::new("Roboto".to_string());
@@ -276,14 +279,46 @@ impl TextRenderer {
       italic_id: Some(FontId(8)),
       bold_italic_id: Some(FontId(9)),
     });
-    
+
+    // FiraMono family (FontId 10-11)
+    all_fonts.push(
+      FontArc::try_from_vec(fira_mono_regular.to_vec())
+        .expect("Failed to load FiraMono Regular"),
+    );
+    all_fonts.push(
+      FontArc::try_from_vec(fira_mono_bold.to_vec())
+        .expect("Failed to load FiraMono Bold"),
+    );
+    font_registry.register_family(FontFamily {
+      name: "FiraMono".to_string(),
+      regular_id: FontId(10),
+      bold_id: Some(FontId(11)),
+      italic_id: None,
+      bold_italic_id: None,
+    });
+
     // Create brush with all fonts
     let brush = BrushBuilder::using_fonts(all_fonts.clone())
       .initial_cache_size((2048, 2048))
       .build(device, width, height, format);
     
-    let fonts = HashMap::new();
-    
+    // Populate legacy font name → FontId map so render()
+    // lookups work for all registered families.
+    let mut fonts = HashMap::new();
+    let family_names = [
+      "Inter",
+      "Roboto",
+      "RobotoCondensed",
+      "FiraMono",
+    ];
+    for name in &family_names {
+      if let Some(id) =
+        font_registry.get_font_id(Some(name), false, false)
+      {
+        fonts.insert(name.to_string(), id);
+      }
+    }
+
     Self {
       brush,
       fonts,
