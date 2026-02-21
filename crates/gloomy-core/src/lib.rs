@@ -32,6 +32,7 @@ pub mod validation;
 pub mod rich_text;
 pub mod widget_state;
 pub mod kpi;
+pub mod headless;
 
 #[cfg(test)]
 mod tests;
@@ -55,3 +56,4 @@ pub use style_context::StyleContext;
 pub use data_source::{DataSource, CellValue, VecDataSource};
 pub use datagrid::{ColumnDef, ColumnWidth, DataGrid, DataGridStyle, SelectionMode, SortDirection};
 pub use kpi::{KpiCard, KpiCardStyle, KpiTrend, TrendDirection};
+pub use headless::{HeadlessRenderer, HeadlessConfig};

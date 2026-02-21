@@ -1295,12 +1295,12 @@ impl Default for DatePickerStyle {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CheckboxStyle {
     #[serde(default = "default_checkbox_color")]
     pub background: Color,
     #[serde(default = "default_checkbox_checked")]
-    pub background_checked: Color, // Was check_color? No check_color is typically the tick.
+    pub background_checked: Color,
     #[serde(default = "default_checkmark_color")]
     pub checkmark_color: Color,
     #[serde(default)]
@@ -1309,7 +1309,19 @@ pub struct CheckboxStyle {
     pub corner_radius: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+impl Default for CheckboxStyle {
+  fn default() -> Self {
+    Self {
+      background: default_checkbox_color(),
+      background_checked: default_checkbox_checked(),
+      checkmark_color: default_checkmark_color(),
+      border: None,
+      corner_radius: 0.0,
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SliderStyle {
     #[serde(default = "default_inactive_color")]
     pub track_color: Color,
@@ -1323,6 +1335,19 @@ pub struct SliderStyle {
     pub track_height: f32,
     #[serde(default)]
     pub thumb_radius: f32,
+}
+
+impl Default for SliderStyle {
+  fn default() -> Self {
+    Self {
+      track_color: default_inactive_color(),
+      active_track_color: default_active_color(),
+      thumb_color: default_thumb_color(),
+      thumb_border: None,
+      track_height: 6.0,
+      thumb_radius: 8.0,
+    }
+  }
 }
 
 // Helpers for defaults
