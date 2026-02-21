@@ -5,7 +5,7 @@
 //!   cargo run --example visual_test -- update <name>
 //!   cargo run --example visual_test -- compare-all
 
-use gloomy_driver::diff::DiffConfig;
+use gloomy_driver::diff::{DiffConfig, collect_widgets};
 use gloomy_driver::screenshot::HeadlessRenderer;
 use gloomy_driver::snapshot::SnapshotManager;
 use std::path::PathBuf;
@@ -113,6 +113,46 @@ fn cmd_compare_all() -> anyhow::Result<bool> {
   Ok(all_passed)
 }
 
+fn cmd_render(ron_path_str: &str) -> anyhow::Result<bool> {
+  let path = PathBuf::from(ron_path_str);
+  if !path.exists() {
+    anyhow::bail!(
+      "RON file not found: {}", path.display()
+    );
+  }
+  let stem = path
+    .file_stem()
+    .map(|s| s.to_string_lossy().to_string())
+    .unwrap_or_else(|| "output".to_string());
+
+  let mut renderer =
+    HeadlessRenderer::new(DEFAULT_WIDTH, DEFAULT_HEIGHT, SCALE)?;
+  let mut root = gloomy_core::load_ui(&path)?;
+  let image =
+    renderer.render_to_image(&mut root, None, None)?;
+
+  let render_dir = snapshot_dir().join("render");
+  std::fs::create_dir_all(&render_dir)?;
+  let out_path = render_dir.join(format!("{stem}.png"));
+  image.save(&out_path)?;
+
+  let widgets = collect_widgets(&root);
+  let abs = out_path
+    .canonicalize()
+    .unwrap_or(out_path);
+  let report = serde_json::json!({
+    "image": abs.display().to_string(),
+    "width": image.width(),
+    "height": image.height(),
+    "widgets": widgets,
+  });
+  println!(
+    "{}",
+    serde_json::to_string_pretty(&report)?
+  );
+  Ok(true)
+}
+
 fn usage() {
   eprintln!("Usage:");
   eprintln!(
@@ -124,10 +164,16 @@ fn usage() {
   eprintln!(
     "  cargo run --example visual_test -- compare-all"
   );
+  eprintln!(
+    "  cargo run --example visual_test -- render <path.ron>"
+  );
   eprintln!();
   eprintln!(
     "<name> matches a .ron file in examples/ui/ \
      (e.g. 'form_demo')."
+  );
+  eprintln!(
+    "<path.ron> is a direct path to any RON UI file."
   );
 }
 
@@ -154,6 +200,13 @@ fn main() {
       cmd_compare(&args[2])
     }
     "compare-all" => cmd_compare_all(),
+    "render" => {
+      if args.len() < 3 {
+        usage();
+        process::exit(2);
+      }
+      cmd_render(&args[2])
+    }
     other => {
       eprintln!("Unknown command: {other}");
       usage();

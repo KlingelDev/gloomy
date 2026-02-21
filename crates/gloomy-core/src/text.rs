@@ -95,8 +95,9 @@ impl TextRenderer {
     let font = FontArc::try_from_vec(font_bytes.to_vec())
       .expect("Failed to load font");
       
-    let mut brush =
-      BrushBuilder::using_font(font.clone()).build(device, width, height, format);
+    let mut brush = BrushBuilder::using_font(font.clone())
+      .initial_cache_size((2048, 2048))
+      .build(device, width, height, format);
 
     let mut fonts = HashMap::new();
     fonts.insert("default".to_string(), FontId(0));
@@ -172,6 +173,7 @@ impl TextRenderer {
     }
     
     let mut brush = BrushBuilder::using_fonts(all_fonts.clone())
+      .initial_cache_size((2048, 2048))
       .build(device, width, height, format);
 
     // Initialize font registry with "Roboto" family
@@ -277,6 +279,7 @@ impl TextRenderer {
     
     // Create brush with all fonts
     let brush = BrushBuilder::using_fonts(all_fonts.clone())
+      .initial_cache_size((2048, 2048))
       .build(device, width, height, format);
     
     let fonts = HashMap::new();
@@ -384,95 +387,132 @@ impl TextRenderer {
   }
 
   /// Renders queued text.
+  ///
+  /// All text is queued into glyph_brush in a single call to
+  /// avoid losing glyphs between batches (glyph_brush's
+  /// `process_queued` calls `cleanup_frame` after each
+  /// invocation, which invalidates the previous batch's data).
+  ///
+  /// Scissor clipping is applied via multiple render passes
+  /// that each reuse the same vertex buffer with `draw()`.
   pub fn render(
-    &mut self, 
+    &mut self,
     encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
   ) {
       if self.pending.is_empty() { return; }
-      
-      // Sort by scissor rect - REVERSE order so None renders LAST (on top)
-      self.pending.sort_by(|a, b| b.4.cmp(&a.4));
-      
+
       let scale = self.scale_factor;
       let width = self.width;
       let height = self.height;
 
-      let mut current_idx = 0;
-      while current_idx < self.pending.len() {
-           // Find batch range
-           let batch_scissor = self.pending[current_idx].4;
-           let mut end_idx = current_idx + 1;
-           while end_idx < self.pending.len() && self.pending[end_idx].4 == batch_scissor {
-               end_idx += 1;
-           }
-           
-           // Process batch
-           let batch_items = &self.pending[current_idx..end_idx];
-           let sections: Vec<Section> = batch_items.iter()
-             .map(|(text, pos, size, color, _scissor, align, font_name)| {
-                 let font_id = font_name.as_deref()
-                     .and_then(|name| self.fonts.get(name))
-                     .copied()
-                     .unwrap_or(FontId(0));
-                     
-                 // Apply Scale Factor to Position and Size
-                 let scaled_x = pos.x * scale;
-                 let scaled_y = pos.y * scale;
-                 let scaled_size = size * scale;
+      // Sort by scissor so we can batch render passes.
+      self.pending.sort_by(|a, b| b.4.cmp(&a.4));
 
-                 Section::default()
-                     .add_text(
-                         Text::new(text.as_str())
-                           .with_scale(scaled_size)
-                           .with_color([color.x, color.y, color.z, color.w])
-                           .with_font_id(font_id),
-                     )
-                     .with_screen_position((scaled_x, scaled_y))
-                     .with_layout(
-                         wgpu_text::glyph_brush::Layout::default()
-                             .h_align(*align)
-                     )
-             }).collect();
-             
-           // Queue and Draw
-           self.brush.queue(device, queue, sections).unwrap();
-           
-           {
-               let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                   label: Some("GloomyTextPass"),
-                   color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                       view,
-                       resolve_target: None,
-                       ops: wgpu::Operations {
-                           load: wgpu::LoadOp::Load,
-                           store: wgpu::StoreOp::Store,
-                       },
-                   })],
-                   depth_stencil_attachment: None,
-                   timestamp_writes: None,
-                   occlusion_query_set: None,
-               });
-               
-               if let Some((x, y, w, h)) = batch_scissor {
-                   let sx = x.min(width);
-                   let sy = y.min(height);
-                   let sw = w.min(width - sx);
-                   let sh = h.min(height - sy);
-                   
-                   log::info!("  Batch scissor: Some({},{},{},{})", sx, sy, sw, sh);
-                   rpass.set_scissor_rect(sx, sy, sw, sh);
-               } else {
-                   log::info!("  Batch scissor: None -> fullscreen ({},{})", width, height);
-                   rpass.set_scissor_rect(0, 0, width, height);
-               }
-               
-               self.brush.draw(&mut rpass);
-           }
-           
-           current_idx = end_idx;
+      // Queue ALL sections in one call so glyph_brush
+      // produces a single vertex buffer with all glyphs.
+      let all_sections: Vec<Section> = self.pending.iter()
+        .map(|(text, pos, size, color, _scissor, align, font_name)| {
+          let font_id = font_name.as_deref()
+            .and_then(|name| self.fonts.get(name))
+            .copied()
+            .unwrap_or(FontId(0));
+          let scaled_x = pos.x * scale;
+          let scaled_y = pos.y * scale;
+          let scaled_size = size * scale;
+          Section::default()
+            .add_text(
+              Text::new(text.as_str())
+                .with_scale(scaled_size)
+                .with_color([color.x, color.y, color.z, color.w])
+                .with_font_id(font_id),
+            )
+            .with_screen_position((scaled_x, scaled_y))
+            .with_layout(
+              wgpu_text::glyph_brush::Layout::default()
+                .h_align(*align)
+            )
+        }).collect();
+
+      self.brush.queue(device, queue, all_sections).unwrap();
+
+      // Check if any pending items actually use scissors.
+      let has_scissors =
+        self.pending.iter().any(|p| p.4.is_some());
+
+      if !has_scissors {
+        // Fast path: no scissors, single draw with fullscreen.
+        let mut rpass = encoder.begin_render_pass(
+          &wgpu::RenderPassDescriptor {
+            label: Some("GloomyTextPass"),
+            color_attachments: &[Some(
+              wgpu::RenderPassColorAttachment {
+                view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                  load: wgpu::LoadOp::Load,
+                  store: wgpu::StoreOp::Store,
+                },
+              },
+            )],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+          },
+        );
+        rpass.set_scissor_rect(0, 0, width, height);
+        self.brush.draw(&mut rpass);
+      } else {
+        // Slow path: draw once per unique scissor rect so
+        // that each render pass clips to its scissor. All
+        // draws use the same vertex buffer — the GPU scissor
+        // clips non-matching glyphs.
+        let mut idx = 0;
+        while idx < self.pending.len() {
+          let scissor = self.pending[idx].4;
+          // Advance past items with same scissor.
+          let mut end = idx + 1;
+          while end < self.pending.len()
+            && self.pending[end].4 == scissor
+          {
+            end += 1;
+          }
+
+          {
+            let mut rpass = encoder.begin_render_pass(
+              &wgpu::RenderPassDescriptor {
+                label: Some("GloomyTextPass"),
+                color_attachments: &[Some(
+                  wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                      load: wgpu::LoadOp::Load,
+                      store: wgpu::StoreOp::Store,
+                    },
+                  },
+                )],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+              },
+            );
+            if let Some((x, y, w, h)) = scissor {
+              let sx = x.min(width);
+              let sy = y.min(height);
+              let sw = w.min(width - sx);
+              let sh = h.min(height - sy);
+              rpass.set_scissor_rect(sx, sy, sw, sh);
+            } else {
+              rpass.set_scissor_rect(0, 0, width, height);
+            }
+            self.brush.draw(&mut rpass);
+          }
+
+          idx = end;
+        }
       }
       
       self.pending.clear();

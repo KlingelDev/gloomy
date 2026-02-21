@@ -89,3 +89,7 @@ path = "examples/virtual_list.rs"
 [[example]]
 name = "visual_test"
 path = "examples/visual_test.rs"
+
+[[example]]
+name = "visual_check"
+path = "examples/visual_check.rs"

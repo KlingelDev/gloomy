@@ -312,6 +312,76 @@ fn widget_id(widget: &Widget) -> Option<&str> {
   }
 }
 
+/// Describes a widget in the tree with its type and bounds.
+#[derive(Debug, Clone, Serialize)]
+pub struct WidgetInfo {
+  /// Widget variant name (e.g. "Button", "Container").
+  pub widget_type: String,
+  /// Widget ID, if present.
+  pub id: Option<String>,
+  /// Left edge (logical pixels).
+  pub x: f32,
+  /// Top edge (logical pixels).
+  pub y: f32,
+  /// Width (logical pixels).
+  pub width: f32,
+  /// Height (logical pixels).
+  pub height: f32,
+  /// Child widgets (Container children only).
+  pub children: Vec<WidgetInfo>,
+}
+
+/// Recursively collects widget info from a tree.
+pub fn collect_widgets(widget: &Widget) -> WidgetInfo {
+  let bounds = widget_bounds(widget);
+  let id = widget_id(widget).map(|s| s.to_string());
+  let wtype = widget_type_name(widget).to_string();
+  let children = match widget {
+    Widget::Container { children, .. } => {
+      children.iter().map(collect_widgets).collect()
+    }
+    _ => Vec::new(),
+  };
+  WidgetInfo {
+    widget_type: wtype,
+    id,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    children,
+  }
+}
+
+fn widget_type_name(widget: &Widget) -> &'static str {
+  match widget {
+    Widget::Container { .. } => "Container",
+    Widget::Tab { .. } => "Tab",
+    Widget::Label { .. } => "Label",
+    Widget::Button { .. } => "Button",
+    Widget::ListView { .. } => "ListView",
+    Widget::Tree { .. } => "Tree",
+    Widget::ToggleSwitch { .. } => "ToggleSwitch",
+    Widget::ProgressBar { .. } => "ProgressBar",
+    Widget::RadioButton { .. } => "RadioButton",
+    Widget::Dropdown { .. } => "Dropdown",
+    Widget::Spacer { .. } => "Spacer",
+    Widget::Divider { .. } => "Divider",
+    Widget::Scrollbar { .. } => "Scrollbar",
+    Widget::DataGrid { .. } => "DataGrid",
+    Widget::KpiCard { .. } => "KpiCard",
+    Widget::TextInput { .. } => "TextInput",
+    Widget::NumberInput { .. } => "NumberInput",
+    Widget::Autocomplete { .. } => "Autocomplete",
+    Widget::DatePicker { .. } => "DatePicker",
+    Widget::Checkbox { .. } => "Checkbox",
+    Widget::Slider { .. } => "Slider",
+    Widget::Image { .. } => "Image",
+    Widget::Icon { .. } => "Icon",
+    Widget::Chart { .. } => "Chart",
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
