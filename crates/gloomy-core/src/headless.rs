@@ -112,9 +112,18 @@ impl HeadlessRenderer {
       view_formats: &[],
     });
 
-    let renderer = GloomyRenderer::new(
+    let mut renderer = GloomyRenderer::new(
       &device,
       format,
+      config.width,
+      config.height,
+      config.scale_factor,
+    );
+
+    // Initialize uniform buffers (screen_size etc.) that the
+    // windowed path sets via the first resize event.
+    renderer.resize(
+      &queue,
       config.width,
       config.height,
       config.scale_factor,

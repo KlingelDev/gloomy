@@ -159,7 +159,7 @@ fn main() -> anyhow::Result<()> {
 
   let mut ui = load_ui(&args.input)?;
 
-  // Apply theme background color.
+  // Apply theme to the widget tree.
   let theme = match args.theme.as_str() {
     "light" => gloomy_core::theme::Theme::light(),
     "high_contrast" => {
@@ -167,6 +167,7 @@ fn main() -> anyhow::Result<()> {
     }
     _ => gloomy_core::theme::Theme::dark(),
   };
+  gloomy_driver::apply_theme(&mut ui, &theme);
 
   let mut renderer =
     HeadlessRenderer::new(HeadlessConfig {

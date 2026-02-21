@@ -168,21 +168,25 @@ impl GloomyDriver {
 
 /// Dumps the computed layout tree as indented text.
 ///
-/// Each line contains: widget type, optional id, and
-/// computed bounds (x, y, w, h).
+/// Positions are absolute (screen coordinates). Each line
+/// contains: widget type, optional id, and computed bounds.
 pub fn dump_layout(widget: &Widget) -> String {
   let mut out = String::new();
-  dump_layout_recursive(widget, 0, &mut out);
+  dump_layout_recursive(widget, 0, 0.0, 0.0, &mut out);
   out
 }
 
 fn dump_layout_recursive(
   widget: &Widget,
   depth: usize,
+  offset_x: f32,
+  offset_y: f32,
   out: &mut String,
 ) {
   let indent = "  ".repeat(depth);
   let b = widget.bounds();
+  let abs_x = offset_x + b.x;
+  let abs_y = offset_y + b.y;
   let wtype = widget_type_name(widget);
   let id = widget_id(widget);
 
@@ -193,11 +197,25 @@ fn dump_layout_recursive(
 
   out.push_str(&format!(
     "{}{}{} x={:.0} y={:.0} w={:.0} h={:.0}\n",
-    indent, wtype, id_str, b.x, b.y, b.width, b.height,
+    indent, wtype, id_str,
+    abs_x, abs_y, b.width, b.height,
   ));
 
+  // Children are positioned relative to their container.
+  let child_ox;
+  let child_oy;
+  if let Widget::Container { .. } = widget {
+    child_ox = abs_x;
+    child_oy = abs_y;
+  } else {
+    child_ox = offset_x;
+    child_oy = offset_y;
+  }
+
   for child in widget_children(widget) {
-    dump_layout_recursive(child, depth + 1, out);
+    dump_layout_recursive(
+      child, depth + 1, child_ox, child_oy, out,
+    );
   }
 }
 
@@ -223,9 +241,13 @@ pub struct TextEntry {
 }
 
 /// Extracts all visible text from the widget tree.
+///
+/// Positions are absolute (screen coordinates), computed by
+/// accumulating parent container offsets — matching where the
+/// text actually renders on screen.
 pub fn dump_text(widget: &Widget) -> Vec<TextEntry> {
   let mut entries = Vec::new();
-  dump_text_recursive(widget, &mut entries);
+  dump_text_recursive(widget, 0.0, 0.0, &mut entries);
   entries
 }
 
@@ -241,9 +263,13 @@ pub fn find_text(
 
 fn dump_text_recursive(
   widget: &Widget,
+  offset_x: f32,
+  offset_y: f32,
   entries: &mut Vec<TextEntry>,
 ) {
   let b = widget.bounds();
+  let abs_x = offset_x + b.x;
+  let abs_y = offset_y + b.y;
   let wtype = widget_type_name(widget);
   let id = widget_id(widget).map(|s| s.to_string());
 
@@ -251,8 +277,8 @@ fn dump_text_recursive(
     Widget::Label { text, .. } => {
       entries.push(TextEntry {
         text: text.clone(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id,
@@ -262,15 +288,17 @@ fn dump_text_recursive(
     Widget::Button { text, .. } => {
       entries.push(TextEntry {
         text: text.clone(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id,
         widget_type: wtype.to_string(),
       });
     }
-    Widget::TextInput { value, placeholder, .. } => {
+    Widget::TextInput {
+      value, placeholder, ..
+    } => {
       let txt = if value.is_empty() {
         placeholder.clone()
       } else {
@@ -279,8 +307,8 @@ fn dump_text_recursive(
       if !txt.is_empty() {
         entries.push(TextEntry {
           text: txt,
-          x: b.x,
-          y: b.y,
+          x: abs_x,
+          y: abs_y,
           width: b.width,
           height: b.height,
           widget_id: id,
@@ -291,8 +319,8 @@ fn dump_text_recursive(
     Widget::KpiCard { title, value, .. } => {
       entries.push(TextEntry {
         text: title.clone(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id.clone(),
@@ -300,21 +328,23 @@ fn dump_text_recursive(
       });
       entries.push(TextEntry {
         text: value.clone(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id,
         widget_type: wtype.to_string(),
       });
     }
-    Widget::Dropdown { options, selected_index, .. } => {
+    Widget::Dropdown {
+      options, selected_index, ..
+    } => {
       if let Some(idx) = selected_index {
         if let Some(opt) = options.get(*idx) {
           entries.push(TextEntry {
             text: opt.clone(),
-            x: b.x,
-            y: b.y,
+            x: abs_x,
+            y: abs_y,
             width: b.width,
             height: b.height,
             widget_id: id,
@@ -326,8 +356,8 @@ fn dump_text_recursive(
     Widget::RadioButton { label, .. } => {
       entries.push(TextEntry {
         text: label.clone(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id,
@@ -338,8 +368,8 @@ fn dump_text_recursive(
       for item in items {
         entries.push(TextEntry {
           text: item.clone(),
-          x: b.x,
-          y: b.y,
+          x: abs_x,
+          y: abs_y,
           width: b.width,
           height: b.height,
           widget_id: id.clone(),
@@ -350,8 +380,8 @@ fn dump_text_recursive(
     Widget::Chart { title, .. } if !title.is_empty() => {
       entries.push(TextEntry {
         text: title.clone(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id,
@@ -361,15 +391,17 @@ fn dump_text_recursive(
     Widget::NumberInput { value, .. } => {
       entries.push(TextEntry {
         text: value.to_string(),
-        x: b.x,
-        y: b.y,
+        x: abs_x,
+        y: abs_y,
         width: b.width,
         height: b.height,
         widget_id: id,
         widget_type: wtype.to_string(),
       });
     }
-    Widget::Autocomplete { value, placeholder, .. } => {
+    Widget::Autocomplete {
+      value, placeholder, ..
+    } => {
       let txt = if value.is_empty() {
         placeholder.clone()
       } else {
@@ -378,8 +410,8 @@ fn dump_text_recursive(
       if !txt.is_empty() {
         entries.push(TextEntry {
           text: txt,
-          x: b.x,
-          y: b.y,
+          x: abs_x,
+          y: abs_y,
           width: b.width,
           height: b.height,
           widget_id: id,
@@ -390,8 +422,26 @@ fn dump_text_recursive(
     _ => {}
   }
 
+  // When recursing into containers, the children's bounds
+  // are relative to the container's position, so pass the
+  // container's absolute position as the new offset.
+  let child_offset_x;
+  let child_offset_y;
+  if let Widget::Container { .. } = widget {
+    child_offset_x = abs_x;
+    child_offset_y = abs_y;
+  } else {
+    child_offset_x = offset_x;
+    child_offset_y = offset_y;
+  }
+
   for child in widget_children(widget) {
-    dump_text_recursive(child, entries);
+    dump_text_recursive(
+      child,
+      child_offset_x,
+      child_offset_y,
+      entries,
+    );
   }
 }
 
@@ -504,6 +554,97 @@ pub fn assert_screenshot(
   let _ = std::fs::remove_file(&actual_path);
   let _ = std::fs::remove_file(&diff_path);
   Ok(())
+}
+
+// ── Theme application ─────────────────────────────────────
+
+/// Applies a theme's color palette to a widget tree.
+///
+/// Walks the tree and updates widget styles (backgrounds,
+/// text colors, borders, etc.) to match the theme. This
+/// modifies the tree in place.
+pub fn apply_theme(
+  widget: &mut Widget,
+  theme: &gloomy_core::theme::Theme,
+) {
+  let c = &theme.colors;
+
+  match widget {
+    Widget::Container {
+      style, children, ..
+    } => {
+      if style.background.is_some() {
+        style.background = Some(c.surface);
+      }
+      if let Some(ref mut border) = style.border {
+        border.color = c.border;
+      }
+      for child in children.iter_mut() {
+        apply_theme(child, theme);
+      }
+    }
+    Widget::Label { color, .. } => {
+      *color = c.text;
+    }
+    Widget::Button { style, .. } => {
+      style.idle = gloomy_core::style::BoxStyle::fill(c.surface)
+        .with_radius(4.0);
+      style.hover =
+        gloomy_core::style::BoxStyle::fill(c.hover)
+          .with_radius(4.0);
+      style.active =
+        gloomy_core::style::BoxStyle::fill(c.active)
+          .with_radius(4.0);
+      style.text_color = c.text;
+    }
+    Widget::TextInput { style, .. } => {
+      style.idle.background = Some(c.surface);
+      style.focused.background = Some(c.surface);
+      style.text_color = c.text;
+      style.placeholder_color = c.text_disabled;
+    }
+    Widget::Checkbox { style, .. } => {
+      style.background = c.surface;
+      style.background_checked = c.primary;
+      style.checkmark_color = c.text;
+    }
+    Widget::Slider { style, .. } => {
+      style.track_color = c.surface;
+      style.active_track_color = c.primary;
+      style.thumb_color = c.text;
+    }
+    Widget::ToggleSwitch { style, .. } => {
+      style.track_color_on = Some(c.success);
+      style.track_color_off = Some(c.surface);
+      style.thumb_color = Some(c.text);
+    }
+    Widget::ProgressBar { style, .. } => {
+      style.background_color = Some(c.surface);
+      style.fill_color = Some(c.primary);
+    }
+    Widget::RadioButton { style, .. } => {
+      style.outer_color = Some(c.border);
+      style.inner_color = Some(c.primary);
+    }
+    Widget::Dropdown { style, .. } => {
+      style.background = Some(c.surface);
+      style.text_color = Some(c.text);
+    }
+    Widget::Divider { color, .. } => {
+      *color = c.divider;
+    }
+    Widget::KpiCard { style, .. } => {
+      style.background = c.surface;
+      style.label_color = c.text_secondary;
+      style.value_color = c.text;
+    }
+    Widget::Tab { tabs, .. } => {
+      for tab in tabs.iter_mut() {
+        apply_theme(&mut tab.content, theme);
+      }
+    }
+    _ => {}
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────

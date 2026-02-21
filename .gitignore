@@ -7,3 +7,7 @@ Cargo.lock
 
 debug_output*.txt
 build.log
+
+# Generated images
+*.png
+/catalog/

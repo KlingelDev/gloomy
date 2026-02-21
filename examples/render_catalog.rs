@@ -34,6 +34,7 @@ fn wrap(child: Widget) -> Widget {
     layout: Layout {
       direction: Direction::Column,
       spacing: 8.0,
+      align_items: gloomy_core::layout::Align::Stretch,
       ..Default::default()
     },
     flex: 0.0,

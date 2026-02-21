@@ -620,19 +620,13 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
     }
 
     Widget::Label { text, x, y, size, color, text_align, width, height, font, .. } => {
-      // Set scissor to clip text within label bounds
-      let s = ctx.scale_factor;
-      let scissor_x = ((ctx.offset.x + x) * s).max(0.0).floor() as u32;
-      let scissor_y = ((ctx.offset.y + y) * s).max(0.0).floor() as u32;
-      let scissor_w = (*width * s).max(0.0).ceil() as u32;
-      let scissor_h = (*height * s).max(0.0).ceil() as u32;
+      // Labels do not set their own scissor — the parent
+      // container's scissor (if scrollable) handles overflow.
+      // Per-label scissors cause batching issues in the text
+      // renderer that clip text incorrectly.
+      let old_scissor: Option<Option<(u32, u32, u32, u32)>> =
+        None;
 
-      let old_scissor = if scissor_w > 0 && scissor_h > 0 {
-        Some(ctx.text.set_scissor(Some((scissor_x, scissor_y, scissor_w, scissor_h))))
-      } else {
-        None
-      };
-      
       let mut text_pos = ctx.offset + Vec2::new(*x, *y);
       if *text_align == TextAlign::Center {
           text_pos.x += width * 0.5;
@@ -651,7 +645,7 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         *text_align,
         Some(*width),
       );
-      
+
       // Restore scissor
       if let Some(prev) = old_scissor {
         ctx.text.set_scissor(prev);
@@ -1210,29 +1204,34 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
     Widget::Divider { bounds, orientation, thickness, color, margin, .. } => {
       use crate::widget::Orientation;
       let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-      
-      // Draw divider based on orientation
+      let col = Vec4::new(color.0, color.1, color.2, color.3);
+
+      // draw_rect expects (center, half_size).
       match orientation {
         Orientation::Horizontal => {
-          let line_pos = Vec2::new(pos.x, pos.y + margin);
-          let line_size = Vec2::new(bounds.width, *thickness);
+          let center = Vec2::new(
+            pos.x + bounds.width * 0.5,
+            pos.y + margin + thickness * 0.5,
+          );
+          let half = Vec2::new(
+            bounds.width * 0.5,
+            thickness * 0.5,
+          );
           ctx.primitives.draw_rect(
-            line_pos,
-            line_size,
-            Vec4::new(color.0, color.1, color.2, color.3),
-            [0.0; 4],
-            0.0
+            center, half, col, [0.0; 4], 0.0,
           );
         }
         Orientation::Vertical => {
-          let line_pos = Vec2::new(pos.x + margin, pos.y);
-          let line_size = Vec2::new(*thickness, bounds.height);
+          let center = Vec2::new(
+            pos.x + margin + thickness * 0.5,
+            pos.y + bounds.height * 0.5,
+          );
+          let half = Vec2::new(
+            thickness * 0.5,
+            bounds.height * 0.5,
+          );
           ctx.primitives.draw_rect(
-            line_pos,
-            line_size,
-            Vec4::new(color.0, color.1, color.2, color.3),
-            [0.0; 4],
-            0.0
+            center, half, col, [0.0; 4], 0.0,
           );
         }
       };
