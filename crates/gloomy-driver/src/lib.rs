@@ -734,52 +734,266 @@ fn widget_children(widget: &Widget) -> &[Widget] {
 mod tests {
   use super::*;
   use gloomy_core::style::ButtonStyle;
+  use gloomy_core::theme::Theme;
+  use gloomy_core::widget::{
+    CheckboxStyle, DropdownStyle, Orientation, SliderStyle,
+  };
+
+  // ── Helper builders ───────────────────────────────────
+
+  fn make_button(
+    text: &str,
+    action: &str,
+  ) -> Widget {
+    Widget::Button {
+      text: text.to_string(),
+      action: action.to_string(),
+      bounds: WidgetBounds::default(),
+      style: ButtonStyle::default(),
+      width: Some(100.0),
+      height: Some(40.0),
+      disabled: false,
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+      font: None,
+    }
+  }
+
+  fn make_checkbox(id: &str, checked: bool) -> Widget {
+    Widget::Checkbox {
+      id: id.to_string(),
+      checked,
+      size: 20.0,
+      style: CheckboxStyle::default(),
+      bounds: WidgetBounds::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    }
+  }
+
+  fn make_text_input(
+    id: &str,
+    value: &str,
+    placeholder: &str,
+  ) -> Widget {
+    Widget::TextInput {
+      id: id.to_string(),
+      value: value.to_string(),
+      placeholder: placeholder.to_string(),
+      font_size: 14.0,
+      text_align: Default::default(),
+      bounds: WidgetBounds::default(),
+      validation: None,
+      style: Default::default(),
+      width: 200.0,
+      height: 32.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    }
+  }
+
+  fn make_dropdown(
+    id: &str,
+    options: Vec<&str>,
+    selected: Option<usize>,
+  ) -> Widget {
+    Widget::Dropdown {
+      id: id.to_string(),
+      options: options.iter().map(|s| s.to_string()).collect(),
+      selected_index: selected,
+      expanded: false,
+      style: DropdownStyle::default(),
+      bounds: WidgetBounds::default(),
+      width: Some(150.0),
+      height: Some(32.0),
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    }
+  }
+
+  fn make_container_with(
+    id: Option<&str>,
+    children: Vec<Widget>,
+  ) -> Widget {
+    let mut root = Widget::container();
+    if let Widget::Container {
+      id: wid,
+      children: wchildren,
+      ..
+    } = &mut root
+    {
+      *wid = id.map(|s| s.to_string());
+      *wchildren = children;
+    }
+    root
+  }
+
+  // ── GloomyDriver::new ────────────────────────────────
+
+  #[test]
+  fn test_driver_new_sets_container_bounds() {
+    let root = Widget::container();
+    let driver = GloomyDriver::new(root, 1024.0, 768.0);
+    assert_eq!(driver.width, 1024.0);
+    assert_eq!(driver.height, 768.0);
+    let bounds = driver.root.bounds();
+    assert_eq!(bounds.width, 1024.0);
+    assert_eq!(bounds.height, 768.0);
+  }
+
+  #[test]
+  fn test_driver_new_with_non_container_root() {
+    let label = Widget::label("solo");
+    let driver = GloomyDriver::new(label, 800.0, 600.0);
+    assert_eq!(driver.width, 800.0);
+    assert!(driver.find("anything").is_none());
+  }
+
+  // ── find / find_bounds ────────────────────────────────
 
   #[test]
   fn test_driver_find() {
-    let mut root = Widget::container();
-    if let Widget::Container { id, children, .. } =
-      &mut root
-    {
-      *id = Some("root".to_string());
-      *children = vec![Widget::Button {
-        text: "Click Me".to_string(),
-        action: "my_action".to_string(),
-        bounds: WidgetBounds {
-          x: 0.0,
-          y: 0.0,
-          width: 100.0,
-          height: 50.0,
-        },
-        style: ButtonStyle::default(),
-        width: Some(100.0),
-        height: Some(50.0),
-        disabled: false,
-        layout: Default::default(),
-        flex: 0.0,
-        grid_col: None,
-        grid_row: None,
-        col_span: 1,
-        row_span: 1,
-        font: None,
-      }];
-    }
-
+    let root = make_container_with(
+      Some("root"),
+      vec![make_button("Click Me", "my_action")],
+    );
     let driver = GloomyDriver::new(root, 800.0, 600.0);
     assert!(driver.find("root").is_some());
   }
 
   #[test]
-  fn test_dump_layout() {
-    let mut root = Widget::container();
-    if let Widget::Container {
-      id, children, ..
-    } = &mut root
-    {
-      *id = Some("main".to_string());
-      *children = vec![Widget::label("Hello")];
-    }
+  fn test_find_nonexistent_returns_none() {
+    let root = make_container_with(Some("root"), vec![]);
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert!(driver.find("nonexistent").is_none());
+  }
 
+  #[test]
+  fn test_find_nested_widget() {
+    let inner = make_container_with(
+      Some("inner"),
+      vec![make_checkbox("cb1", false)],
+    );
+    let root = make_container_with(Some("outer"), vec![inner]);
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert!(driver.find("cb1").is_some());
+    assert!(driver.find("inner").is_some());
+    assert!(driver.find("outer").is_some());
+  }
+
+  #[test]
+  fn test_find_bounds_returns_valid_bounds() {
+    let root = make_container_with(
+      Some("root"),
+      vec![make_button("btn", "act")],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    let bounds = driver.find_bounds("root");
+    assert!(bounds.is_some());
+    let b = bounds.unwrap();
+    assert_eq!(b.width, 800.0);
+    assert_eq!(b.height, 600.0);
+  }
+
+  #[test]
+  fn test_find_bounds_nonexistent() {
+    let root = Widget::container();
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert!(driver.find_bounds("nope").is_none());
+  }
+
+  // ── click ─────────────────────────────────────────────
+
+  #[test]
+  fn test_click_button_returns_action() {
+    let root = make_container_with(
+      Some("root"),
+      vec![make_button("Save", "save_action")],
+    );
+    let mut driver = GloomyDriver::new(root, 800.0, 600.0);
+    // Find the button by iterating children.
+    if let Widget::Container { children, .. } =
+      &driver.root
+    {
+      if let Widget::Button { action, .. } = &children[0] {
+        assert_eq!(action, "save_action");
+      }
+    }
+  }
+
+  #[test]
+  fn test_click_nonexistent_returns_none() {
+    let root = make_container_with(Some("root"), vec![]);
+    let mut driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert!(driver.click("nonexistent").is_none());
+  }
+
+  // ── relayout ──────────────────────────────────────────
+
+  #[test]
+  fn test_relayout_updates_bounds() {
+    let root = make_container_with(
+      Some("root"),
+      vec![Widget::label("test")],
+    );
+    let mut driver = GloomyDriver::new(root, 400.0, 300.0);
+    let b1 = driver.root.bounds();
+
+    // Modify width and relayout.
+    driver.width = 800.0;
+    driver.height = 600.0;
+    if let Widget::Container { bounds, .. } =
+      &mut driver.root
+    {
+      bounds.width = 800.0;
+      bounds.height = 600.0;
+    }
+    driver.relayout();
+
+    let b2 = driver.root.bounds();
+    assert_eq!(b2.width, 800.0);
+    assert_eq!(b2.height, 600.0);
+    assert_ne!(b1.width, b2.width);
+  }
+
+  // ── render_to_image without renderer ──────────────────
+
+  #[test]
+  fn test_render_without_init_fails() {
+    let root = Widget::container();
+    let mut driver = GloomyDriver::new(root, 200.0, 100.0);
+    let result = driver.render_to_image();
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+      msg.contains("init_renderer"),
+      "Expected init_renderer hint, got: {}",
+      msg,
+    );
+  }
+
+  // ── dump_layout ───────────────────────────────────────
+
+  #[test]
+  fn test_dump_layout() {
+    let root = make_container_with(
+      Some("main"),
+      vec![Widget::label("Hello")],
+    );
     let driver = GloomyDriver::new(root, 400.0, 300.0);
     let layout = dump_layout(&driver.root);
     assert!(layout.contains("Container"));
@@ -788,30 +1002,68 @@ mod tests {
   }
 
   #[test]
-  fn test_dump_text() {
-    let mut root = Widget::container();
-    if let Widget::Container { children, .. } = &mut root {
-      *children = vec![
-        Widget::label("Hello World"),
-        Widget::Button {
-          text: "OK".to_string(),
-          action: "ok".to_string(),
-          bounds: WidgetBounds::default(),
-          style: ButtonStyle::default(),
-          width: None,
-          height: None,
-          disabled: false,
-          layout: Default::default(),
-          flex: 0.0,
-          grid_col: None,
-          grid_row: None,
-          col_span: 1,
-          row_span: 1,
-          font: None,
-        },
-      ];
-    }
+  fn test_dump_layout_empty_container() {
+    let root = make_container_with(Some("empty"), vec![]);
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let layout = dump_layout(&driver.root);
+    assert!(layout.contains("Container id=empty"));
+    // Should have exactly one line (no children).
+    assert_eq!(layout.lines().count(), 1);
+  }
 
+  #[test]
+  fn test_dump_layout_nested_indentation() {
+    let inner = make_container_with(
+      Some("child"),
+      vec![Widget::label("nested")],
+    );
+    let root =
+      make_container_with(Some("parent"), vec![inner]);
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let layout = dump_layout(&driver.root);
+    let lines: Vec<&str> = layout.lines().collect();
+    assert_eq!(lines.len(), 3);
+    // Root at depth 0, no indent.
+    assert!(lines[0].starts_with("Container"));
+    // Child container at depth 1, 2-space indent.
+    assert!(lines[1].starts_with("  Container"));
+    // Label at depth 2, 4-space indent.
+    assert!(lines[2].starts_with("    Label"));
+  }
+
+  #[test]
+  fn test_dump_layout_contains_dimensions() {
+    let root = make_container_with(
+      None,
+      vec![make_button("B", "b")],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let layout = dump_layout(&driver.root);
+    // Should contain w= and h= for dimensions.
+    assert!(layout.contains("w="));
+    assert!(layout.contains("h="));
+  }
+
+  #[test]
+  fn test_dump_layout_no_id_for_anonymous_container() {
+    let root = make_container_with(None, vec![]);
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let layout = dump_layout(&driver.root);
+    // Should not contain "id=" since container has no id.
+    assert!(!layout.contains("id="));
+  }
+
+  // ── dump_text ─────────────────────────────────────────
+
+  #[test]
+  fn test_dump_text() {
+    let root = make_container_with(
+      None,
+      vec![
+        Widget::label("Hello World"),
+        make_button("OK", "ok"),
+      ],
+    );
     let driver = GloomyDriver::new(root, 400.0, 300.0);
     let texts = dump_text(&driver.root);
     assert_eq!(texts.len(), 2);
@@ -822,15 +1074,284 @@ mod tests {
   }
 
   #[test]
+  fn test_dump_text_empty_container() {
+    let root = make_container_with(None, vec![]);
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert!(texts.is_empty());
+  }
+
+  #[test]
+  fn test_dump_text_text_input_with_value() {
+    let root = make_container_with(
+      None,
+      vec![make_text_input("ti", "typed", "hint")],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "typed");
+    assert_eq!(texts[0].widget_type, "TextInput");
+  }
+
+  #[test]
+  fn test_dump_text_text_input_empty_shows_placeholder() {
+    let root = make_container_with(
+      None,
+      vec![make_text_input("ti", "", "Enter name")],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Enter name");
+  }
+
+  #[test]
+  fn test_dump_text_text_input_both_empty() {
+    let root = make_container_with(
+      None,
+      vec![make_text_input("ti", "", "")],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert!(texts.is_empty());
+  }
+
+  #[test]
+  fn test_dump_text_dropdown_with_selection() {
+    let root = make_container_with(
+      None,
+      vec![make_dropdown(
+        "dd",
+        vec!["Red", "Green", "Blue"],
+        Some(1),
+      )],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Green");
+    assert_eq!(texts[0].widget_type, "Dropdown");
+  }
+
+  #[test]
+  fn test_dump_text_dropdown_no_selection() {
+    let root = make_container_with(
+      None,
+      vec![make_dropdown(
+        "dd",
+        vec!["A", "B"],
+        None,
+      )],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert!(texts.is_empty());
+  }
+
+  #[test]
+  fn test_dump_text_radio_button() {
+    let root = make_container_with(
+      None,
+      vec![Widget::RadioButton {
+        group_id: "grp".to_string(),
+        value: "opt1".to_string(),
+        selected: true,
+        label: "Option One".to_string(),
+        style: Default::default(),
+        bounds: WidgetBounds::default(),
+        layout: Default::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Option One");
+    assert_eq!(texts[0].widget_type, "RadioButton");
+  }
+
+  #[test]
+  fn test_dump_text_number_input() {
+    let root = make_container_with(
+      None,
+      vec![Widget::NumberInput {
+        id: "num1".to_string(),
+        value: 42.5,
+        min: None,
+        max: None,
+        step: 1.0,
+        precision: 0,
+        show_spinner: true,
+        bounds: WidgetBounds::default(),
+        validation: None,
+        style: Default::default(),
+        width: 100.0,
+        height: 32.0,
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "42.5");
+    assert_eq!(texts[0].widget_type, "NumberInput");
+  }
+
+  #[test]
+  fn test_dump_text_kpi_card() {
+    let root = make_container_with(
+      None,
+      vec![Widget::KpiCard {
+        id: Some("kpi1".to_string()),
+        title: "Revenue".to_string(),
+        value: "$1.2M".to_string(),
+        trend: None,
+        style: Default::default(),
+        bounds: WidgetBounds::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    // KpiCard emits both title and value.
+    assert_eq!(texts.len(), 2);
+    assert_eq!(texts[0].text, "Revenue");
+    assert_eq!(texts[1].text, "$1.2M");
+  }
+
+  #[test]
+  fn test_dump_text_listview() {
+    let root = make_container_with(
+      None,
+      vec![Widget::ListView {
+        id: "list1".to_string(),
+        items: vec![
+          "Item A".to_string(),
+          "Item B".to_string(),
+          "Item C".to_string(),
+        ],
+        selected_index: None,
+        style: Default::default(),
+        bounds: WidgetBounds::default(),
+        width: Some(200.0),
+        height: Some(100.0),
+        layout: Default::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+        scroll_offset: 0.0,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 3);
+    assert_eq!(texts[0].text, "Item A");
+    assert_eq!(texts[1].text, "Item B");
+    assert_eq!(texts[2].text, "Item C");
+    assert_eq!(texts[0].widget_type, "ListView");
+  }
+
+  #[test]
+  fn test_dump_text_autocomplete_with_value() {
+    let root = make_container_with(
+      None,
+      vec![Widget::Autocomplete {
+        id: "ac1".to_string(),
+        value: "Paris".to_string(),
+        placeholder: "City...".to_string(),
+        suggestions: vec!["Paris".to_string()],
+        max_visible: 5,
+        bounds: WidgetBounds::default(),
+        style: Default::default(),
+        validation: None,
+        width: 200.0,
+        height: 32.0,
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Paris");
+    assert_eq!(texts[0].widget_type, "Autocomplete");
+  }
+
+  #[test]
+  fn test_dump_text_autocomplete_empty_shows_placeholder() {
+    let root = make_container_with(
+      None,
+      vec![Widget::Autocomplete {
+        id: "ac1".to_string(),
+        value: "".to_string(),
+        placeholder: "Search...".to_string(),
+        suggestions: vec![],
+        max_visible: 5,
+        bounds: WidgetBounds::default(),
+        style: Default::default(),
+        validation: None,
+        width: 200.0,
+        height: 32.0,
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Search...");
+  }
+
+  #[test]
+  fn test_dump_text_nested_containers_offsets() {
+    // Text positions should accumulate container offsets.
+    let inner = make_container_with(
+      None,
+      vec![Widget::label("Deep")],
+    );
+    let root =
+      make_container_with(None, vec![inner]);
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let texts = dump_text(&driver.root);
+    assert_eq!(texts.len(), 1);
+    assert_eq!(texts[0].text, "Deep");
+    // Position should be non-negative (valid offset).
+    assert!(texts[0].x >= 0.0);
+    assert!(texts[0].y >= 0.0);
+  }
+
+  // ── find_text ─────────────────────────────────────────
+
+  #[test]
   fn test_find_text() {
-    let mut root = Widget::container();
-    if let Widget::Container { children, .. } = &mut root {
-      *children = vec![
+    let root = make_container_with(
+      None,
+      vec![
         Widget::label("Dashboard"),
         Widget::label("Settings"),
-      ];
-    }
-
+      ],
+    );
     let driver = GloomyDriver::new(root, 400.0, 300.0);
     let found = find_text(&driver.root, "Dashboard");
     assert!(found.is_some());
@@ -841,12 +1362,379 @@ mod tests {
   }
 
   #[test]
+  fn test_find_text_partial_match() {
+    let root = make_container_with(
+      None,
+      vec![Widget::label("Hello World")],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let found = find_text(&driver.root, "World");
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().text, "Hello World");
+  }
+
+  #[test]
+  fn test_find_text_returns_first_match() {
+    let root = make_container_with(
+      None,
+      vec![
+        Widget::label("Alpha"),
+        Widget::label("Alpha Beta"),
+      ],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let found = find_text(&driver.root, "Alpha");
+    assert!(found.is_some());
+    assert_eq!(found.unwrap().text, "Alpha");
+  }
+
+  // ── widget_id ─────────────────────────────────────────
+
+  #[test]
+  fn test_widget_id_container_with_id() {
+    let w = make_container_with(Some("cid"), vec![]);
+    assert_eq!(widget_id(&w), Some("cid"));
+  }
+
+  #[test]
+  fn test_widget_id_container_without_id() {
+    let w = make_container_with(None, vec![]);
+    assert_eq!(widget_id(&w), None);
+  }
+
+  #[test]
+  fn test_widget_id_label_has_no_id() {
+    let w = Widget::label("text");
+    assert_eq!(widget_id(&w), None);
+  }
+
+  #[test]
+  fn test_widget_id_checkbox() {
+    let w = make_checkbox("my_cb", true);
+    assert_eq!(widget_id(&w), Some("my_cb"));
+  }
+
+  #[test]
+  fn test_widget_id_slider() {
+    let w = Widget::Slider {
+      id: "sl1".to_string(),
+      value: 0.5,
+      min: 0.0,
+      max: 1.0,
+      style: SliderStyle::default(),
+      bounds: WidgetBounds::default(),
+      width: 200.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    assert_eq!(widget_id(&w), Some("sl1"));
+  }
+
+  #[test]
+  fn test_widget_id_dropdown() {
+    let w = make_dropdown("dd1", vec!["A"], None);
+    assert_eq!(widget_id(&w), Some("dd1"));
+  }
+
+  // ── widget_type_name ──────────────────────────────────
+
+  #[test]
+  fn test_widget_type_name_coverage() {
+    assert_eq!(
+      widget_type_name(&Widget::container()),
+      "Container",
+    );
+    assert_eq!(
+      widget_type_name(&Widget::label("t")),
+      "Label",
+    );
+    assert_eq!(
+      widget_type_name(&make_button("b", "a")),
+      "Button",
+    );
+    assert_eq!(
+      widget_type_name(&make_checkbox("c", false)),
+      "Checkbox",
+    );
+    assert_eq!(
+      widget_type_name(
+        &make_dropdown("d", vec!["x"], None),
+      ),
+      "Dropdown",
+    );
+  }
+
+  // ── widget_children ───────────────────────────────────
+
+  #[test]
+  fn test_widget_children_container() {
+    let root = make_container_with(
+      None,
+      vec![Widget::label("a"), Widget::label("b")],
+    );
+    assert_eq!(widget_children(&root).len(), 2);
+  }
+
+  #[test]
+  fn test_widget_children_leaf_has_none() {
+    let label = Widget::label("leaf");
+    assert!(widget_children(&label).is_empty());
+  }
+
+  #[test]
+  fn test_widget_children_empty_container() {
+    let root = make_container_with(None, vec![]);
+    assert!(widget_children(&root).is_empty());
+  }
+
+  // ── CheckboxStyle / SliderStyle defaults ──────────────
+
+  #[test]
+  fn test_checkbox_style_default() {
+    let style = CheckboxStyle::default();
+    // Default background should be non-zero (visible).
+    assert!(style.background.3 > 0.0);
+    assert!(style.background_checked.3 > 0.0);
+    assert!(style.checkmark_color.3 > 0.0);
+  }
+
+  #[test]
+  fn test_slider_style_default() {
+    let style = SliderStyle::default();
+    assert!(style.track_color.3 > 0.0);
+    assert!(style.active_track_color.3 > 0.0);
+    assert!(style.thumb_color.3 > 0.0);
+    assert!(style.track_height > 0.0);
+    assert!(style.thumb_radius > 0.0);
+  }
+
+  // ── apply_theme ───────────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_label() {
+    let mut label = Widget::label("test");
+    let theme = Theme::dark();
+    apply_theme(&mut label, &theme);
+    if let Widget::Label { color, .. } = &label {
+      assert_eq!(*color, theme.colors.text);
+    } else {
+      panic!("Expected Label");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_button() {
+    let mut btn = make_button("B", "act");
+    let theme = Theme::dark();
+    apply_theme(&mut btn, &theme);
+    if let Widget::Button { style, .. } = &btn {
+      assert_eq!(style.text_color, theme.colors.text);
+    } else {
+      panic!("Expected Button");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_checkbox() {
+    let mut cb = make_checkbox("cb", false);
+    let theme = Theme::dark();
+    apply_theme(&mut cb, &theme);
+    if let Widget::Checkbox { style, .. } = &cb {
+      assert_eq!(style.background, theme.colors.surface);
+      assert_eq!(
+        style.background_checked,
+        theme.colors.primary,
+      );
+      assert_eq!(
+        style.checkmark_color,
+        theme.colors.text,
+      );
+    } else {
+      panic!("Expected Checkbox");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_slider() {
+    let mut sl = Widget::Slider {
+      id: "sl".to_string(),
+      value: 0.5,
+      min: 0.0,
+      max: 1.0,
+      style: SliderStyle::default(),
+      bounds: WidgetBounds::default(),
+      width: 200.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut sl, &theme);
+    if let Widget::Slider { style, .. } = &sl {
+      assert_eq!(style.track_color, theme.colors.surface);
+      assert_eq!(
+        style.active_track_color,
+        theme.colors.primary,
+      );
+      assert_eq!(style.thumb_color, theme.colors.text);
+    } else {
+      panic!("Expected Slider");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_text_input() {
+    let mut ti = make_text_input("ti", "v", "p");
+    let theme = Theme::dark();
+    apply_theme(&mut ti, &theme);
+    if let Widget::TextInput { style, .. } = &ti {
+      assert_eq!(style.text_color, theme.colors.text);
+      assert_eq!(
+        style.placeholder_color,
+        theme.colors.text_disabled,
+      );
+    } else {
+      panic!("Expected TextInput");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_divider() {
+    let mut div = Widget::Divider {
+      bounds: WidgetBounds::default(),
+      orientation: Orientation::Horizontal,
+      thickness: 1.0,
+      color: (1.0, 1.0, 1.0, 1.0),
+      margin: 8.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut div, &theme);
+    if let Widget::Divider { color, .. } = &div {
+      assert_eq!(*color, theme.colors.divider);
+    } else {
+      panic!("Expected Divider");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_dropdown() {
+    let mut dd =
+      make_dropdown("dd", vec!["A", "B"], Some(0));
+    let theme = Theme::dark();
+    apply_theme(&mut dd, &theme);
+    if let Widget::Dropdown { style, .. } = &dd {
+      assert_eq!(style.background, Some(theme.colors.surface));
+      assert_eq!(style.text_color, Some(theme.colors.text));
+    } else {
+      panic!("Expected Dropdown");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_kpi_card() {
+    let mut kpi = Widget::KpiCard {
+      id: Some("k1".to_string()),
+      title: "Test".to_string(),
+      value: "100".to_string(),
+      trend: None,
+      style: Default::default(),
+      bounds: WidgetBounds::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut kpi, &theme);
+    if let Widget::KpiCard { style, .. } = &kpi {
+      assert_eq!(style.background, theme.colors.surface);
+      assert_eq!(style.value_color, theme.colors.text);
+      assert_eq!(
+        style.label_color,
+        theme.colors.text_secondary,
+      );
+    } else {
+      panic!("Expected KpiCard");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_container_with_background() {
+    let mut root = Widget::container();
+    if let Widget::Container { style, .. } = &mut root {
+      style.background = Some((0.0, 0.0, 0.0, 1.0));
+    }
+    let theme = Theme::dark();
+    apply_theme(&mut root, &theme);
+    if let Widget::Container { style, .. } = &root {
+      assert_eq!(
+        style.background,
+        Some(theme.colors.surface),
+      );
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_container_no_background_unchanged() {
+    let mut root = Widget::container();
+    let theme = Theme::dark();
+    apply_theme(&mut root, &theme);
+    if let Widget::Container { style, .. } = &root {
+      // Background was None, should remain None.
+      assert!(style.background.is_none());
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_recurses_into_children() {
+    let mut root = make_container_with(
+      None,
+      vec![Widget::label("child text")],
+    );
+    if let Widget::Container { style, .. } = &mut root {
+      style.background = Some((0.0, 0.0, 0.0, 1.0));
+    }
+    let theme = Theme::dark();
+    apply_theme(&mut root, &theme);
+    if let Widget::Container { children, .. } = &root {
+      if let Widget::Label { color, .. } = &children[0] {
+        assert_eq!(*color, theme.colors.text);
+      } else {
+        panic!("Expected Label child");
+      }
+    }
+  }
+
+  // ── HeadlessConfig defaults ───────────────────────────
+
+  #[test]
+  fn test_headless_config_defaults() {
+    let config =
+      gloomy_core::headless::HeadlessConfig::default();
+    assert_eq!(config.width, 1280);
+    assert_eq!(config.height, 720);
+    assert!(!config.force_fallback_adapter);
+    assert_eq!(config.scale_factor, 1.0);
+  }
+
+  // ── Snapshot testing ──────────────────────────────────
+
+  #[test]
   fn test_snapshot_workflow() {
     let root = Widget::container();
     let mut driver = GloomyDriver::new(root, 200.0, 100.0);
 
-    // init_renderer may fail if no GPU/software adapter is
-    // available; skip the test in that case.
     if driver.init_renderer(true).is_err() {
       eprintln!("Skipping: no GPU adapter available");
       return;
@@ -856,20 +1744,376 @@ mod tests {
     let _ = std::fs::remove_dir_all(&dir);
 
     // First run: creates the golden.
-    assert_screenshot(
-      &mut driver, "empty", &dir, 0,
-    )
-    .expect("first run should save golden");
+    assert_screenshot(&mut driver, "empty", &dir, 0)
+      .expect("first run should save golden");
 
     let golden = dir.join("empty.png");
     assert!(golden.exists(), "golden should be saved");
 
     // Second run: identical render should match.
-    assert_screenshot(
-      &mut driver, "empty", &dir, 0,
-    )
-    .expect("identical render should match golden");
+    assert_screenshot(&mut driver, "empty", &dir, 0)
+      .expect("identical render should match golden");
 
     let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn test_snapshot_size_mismatch() {
+    let root = Widget::container();
+    let mut driver = GloomyDriver::new(root, 200.0, 100.0);
+
+    if driver.init_renderer(true).is_err() {
+      eprintln!("Skipping: no GPU adapter available");
+      return;
+    }
+
+    let dir =
+      std::env::temp_dir().join("gloomy_snap_size");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Create golden at 200x100.
+    assert_screenshot(&mut driver, "sized", &dir, 0)
+      .expect("golden creation");
+
+    // Create a golden with different dimensions by saving
+    // a 1x1 image under the same name.
+    let tiny = image::RgbaImage::new(1, 1);
+    tiny
+      .save(dir.join("sized.png"))
+      .expect("overwrite golden");
+
+    // Now assert_screenshot should detect size mismatch.
+    let result =
+      assert_screenshot(&mut driver, "sized", &dir, 0);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+      msg.contains("size mismatch"),
+      "Expected size mismatch error, got: {}",
+      msg,
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn test_snapshot_pixel_mismatch() {
+    let root = Widget::container();
+    let mut driver = GloomyDriver::new(root, 10.0, 10.0);
+
+    if driver.init_renderer(true).is_err() {
+      eprintln!("Skipping: no GPU adapter available");
+      return;
+    }
+
+    let dir =
+      std::env::temp_dir().join("gloomy_snap_pixel");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Create golden.
+    assert_screenshot(&mut driver, "px", &dir, 0)
+      .expect("golden creation");
+
+    // Overwrite golden with all-white image.
+    let white = image::RgbaImage::from_pixel(
+      10,
+      10,
+      image::Rgba([255, 255, 255, 255]),
+    );
+    white
+      .save(dir.join("px.png"))
+      .expect("overwrite golden");
+
+    let result =
+      assert_screenshot(&mut driver, "px", &dir, 0);
+    assert!(result.is_err());
+    let msg = result.unwrap_err().to_string();
+    assert!(
+      msg.contains("pixels differ"),
+      "Expected pixel mismatch error, got: {}",
+      msg,
+    );
+    // Actual and diff files should be saved.
+    assert!(dir.join("px_actual.png").exists());
+    assert!(dir.join("px_diff.png").exists());
+
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  #[test]
+  fn test_snapshot_tolerance() {
+    let root = Widget::container();
+    let mut driver = GloomyDriver::new(root, 4.0, 4.0);
+
+    if driver.init_renderer(true).is_err() {
+      eprintln!("Skipping: no GPU adapter available");
+      return;
+    }
+
+    let dir =
+      std::env::temp_dir().join("gloomy_snap_tol");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Create golden.
+    assert_screenshot(&mut driver, "tol", &dir, 0)
+      .expect("golden creation");
+
+    // Read golden and nudge each pixel by 2.
+    let golden_path = dir.join("tol.png");
+    let mut img =
+      image::open(&golden_path).unwrap().to_rgba8();
+    for pixel in img.pixels_mut() {
+      pixel.0[0] = pixel.0[0].saturating_add(2);
+      pixel.0[1] = pixel.0[1].saturating_add(2);
+      pixel.0[2] = pixel.0[2].saturating_add(2);
+    }
+    img.save(&golden_path).expect("save modified golden");
+
+    // Should fail with tolerance=0.
+    let result =
+      assert_screenshot(&mut driver, "tol", &dir, 0);
+    assert!(result.is_err());
+
+    // Clean up artifacts before re-check.
+    let _ = std::fs::remove_file(dir.join("tol_actual.png"));
+    let _ = std::fs::remove_file(dir.join("tol_diff.png"));
+
+    // Should pass with tolerance=3.
+    let result =
+      assert_screenshot(&mut driver, "tol", &dir, 3);
+    assert!(result.is_ok());
+
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  // ── Rendering with init_renderer ──────────────────────
+
+  #[test]
+  fn test_init_renderer_and_render() {
+    let root = make_container_with(
+      None,
+      vec![Widget::label("render test")],
+    );
+    let mut driver = GloomyDriver::new(root, 100.0, 100.0);
+
+    if driver.init_renderer(true).is_err() {
+      eprintln!("Skipping: no GPU adapter available");
+      return;
+    }
+
+    let img = driver.render_to_image();
+    assert!(img.is_ok());
+    let img = img.unwrap();
+    assert_eq!(img.width(), 100);
+    assert_eq!(img.height(), 100);
+  }
+
+  #[test]
+  fn test_save_screenshot_creates_file() {
+    let root = Widget::container();
+    let mut driver = GloomyDriver::new(root, 50.0, 50.0);
+
+    if driver.init_renderer(true).is_err() {
+      eprintln!("Skipping: no GPU adapter available");
+      return;
+    }
+
+    let dir =
+      std::env::temp_dir().join("gloomy_save_test");
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("test_output.png");
+    let _ = std::fs::remove_file(&path);
+
+    driver
+      .save_screenshot(&path)
+      .expect("save_screenshot should succeed");
+    assert!(path.exists());
+
+    let _ = std::fs::remove_dir_all(&dir);
+  }
+
+  // ── RenderConfig re-export ────────────────────────────
+
+  #[test]
+  fn test_render_config_reexport() {
+    // RenderConfig should be usable as an alias for
+    // HeadlessConfig.
+    let config = RenderConfig {
+      width: 640,
+      height: 480,
+      force_fallback_adapter: true,
+      scale_factor: 2.0,
+    };
+    assert_eq!(config.width, 640);
+    assert_eq!(config.height, 480);
+    assert!(config.force_fallback_adapter);
+    assert_eq!(config.scale_factor, 2.0);
+  }
+
+  // ── Divider widget in layout ──────────────────────────
+
+  #[test]
+  fn test_divider_in_dump_layout() {
+    let root = make_container_with(
+      None,
+      vec![Widget::Divider {
+        bounds: WidgetBounds::default(),
+        orientation: Orientation::Horizontal,
+        thickness: 1.0,
+        color: (0.3, 0.3, 0.3, 1.0),
+        margin: 8.0,
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 400.0, 300.0);
+    let layout = dump_layout(&driver.root);
+    assert!(layout.contains("Divider"));
+  }
+
+  // ── Spacer has no text and no id ──────────────────────
+
+  #[test]
+  fn test_spacer_no_text_no_id() {
+    let spacer = Widget::Spacer {
+      size: 20.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    assert_eq!(widget_id(&spacer), None);
+    assert_eq!(widget_type_name(&spacer), "Spacer");
+    assert!(widget_children(&spacer).is_empty());
+  }
+
+  // ── ToggleSwitch theme ────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_toggle_switch() {
+    let mut ts = Widget::ToggleSwitch {
+      id: "ts1".to_string(),
+      checked: false,
+      style: Default::default(),
+      bounds: WidgetBounds::default(),
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut ts, &theme);
+    if let Widget::ToggleSwitch { style, .. } = &ts {
+      assert_eq!(
+        style.track_color_on,
+        Some(theme.colors.success),
+      );
+      assert_eq!(
+        style.track_color_off,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(
+        style.thumb_color,
+        Some(theme.colors.text),
+      );
+    } else {
+      panic!("Expected ToggleSwitch");
+    }
+  }
+
+  // ── ProgressBar theme ─────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_progress_bar() {
+    let mut pb = Widget::ProgressBar {
+      value: 0.5,
+      min: 0.0,
+      max: 1.0,
+      style: Default::default(),
+      width: Some(200.0),
+      height: Some(20.0),
+      bounds: WidgetBounds::default(),
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut pb, &theme);
+    if let Widget::ProgressBar { style, .. } = &pb {
+      assert_eq!(
+        style.background_color,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(
+        style.fill_color,
+        Some(theme.colors.primary),
+      );
+    } else {
+      panic!("Expected ProgressBar");
+    }
+  }
+
+  // ── RadioButton theme ─────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_radio_button() {
+    let mut rb = Widget::RadioButton {
+      group_id: "g".to_string(),
+      value: "v".to_string(),
+      selected: false,
+      label: "Radio".to_string(),
+      style: Default::default(),
+      bounds: WidgetBounds::default(),
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut rb, &theme);
+    if let Widget::RadioButton { style, .. } = &rb {
+      assert_eq!(
+        style.outer_color,
+        Some(theme.colors.border),
+      );
+      assert_eq!(
+        style.inner_color,
+        Some(theme.colors.primary),
+      );
+    } else {
+      panic!("Expected RadioButton");
+    }
+  }
+
+  // ── Light theme produces different colors ─────────────
+
+  #[test]
+  fn test_apply_theme_light_vs_dark() {
+    let mut label_dark = Widget::label("test");
+    let mut label_light = Widget::label("test");
+    let dark = Theme::dark();
+    let light = Theme::light();
+    apply_theme(&mut label_dark, &dark);
+    apply_theme(&mut label_light, &light);
+    if let (
+      Widget::Label { color: c_dark, .. },
+      Widget::Label { color: c_light, .. },
+    ) = (&label_dark, &label_light)
+    {
+      // Dark and light themes should produce different
+      // text colors.
+      assert_ne!(c_dark, c_light);
+    }
   }
 }
