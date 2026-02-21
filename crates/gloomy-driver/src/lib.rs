@@ -3,6 +3,12 @@
 //! Provides headless rendering, interaction simulation, layout
 //! inspection, text extraction, and visual snapshot testing.
 
+pub mod diff;
+pub mod screenshot;
+pub mod snapshot;
+
+use crate::diff::{DiffConfig, DiffReport};
+use crate::snapshot::SnapshotManager;
 use gloomy_core::data_source::DataProvider;
 use gloomy_core::headless::{HeadlessConfig, HeadlessRenderer};
 use gloomy_core::widget::{Widget, WidgetBounds};
@@ -10,6 +16,7 @@ use gloomy_core::{
   InteractionState, compute_layout, hit_test,
 };
 use glam::Vec2;
+use image::RgbaImage;
 use std::path::Path;
 
 // Re-export for convenience.
@@ -24,7 +31,7 @@ pub struct GloomyDriver {
   pub interaction: InteractionState,
   pub width: f32,
   pub height: f32,
-  renderer: Option<HeadlessRenderer>,
+  headless: Option<HeadlessRenderer>,
 }
 
 impl GloomyDriver {
@@ -45,8 +52,32 @@ impl GloomyDriver {
       interaction: InteractionState::default(),
       width,
       height,
-      renderer: None,
+      headless: None,
     }
+  }
+
+  /// Creates a driver with headless rendering capability.
+  ///
+  /// `pixel_width` and `pixel_height` are the physical pixel
+  /// dimensions of the render target. `scale_factor` maps
+  /// physical pixels to logical UI coordinates.
+  pub fn with_rendering(
+    root: Widget,
+    pixel_width: u32,
+    pixel_height: u32,
+    scale_factor: f32,
+  ) -> anyhow::Result<Self> {
+    let logical_w = pixel_width as f32 / scale_factor;
+    let logical_h = pixel_height as f32 / scale_factor;
+    let mut driver = Self::new(root, logical_w, logical_h);
+    let config = HeadlessConfig {
+      width: pixel_width,
+      height: pixel_height,
+      scale_factor,
+      force_fallback_adapter: false,
+    };
+    driver.headless = Some(HeadlessRenderer::new(config)?);
+    Ok(driver)
   }
 
   /// Initializes the GPU renderer for pixel output.
@@ -64,36 +95,27 @@ impl GloomyDriver {
       force_fallback_adapter: force_fallback,
       ..Default::default()
     };
-    self.renderer = Some(HeadlessRenderer::new(config)?);
+    self.headless = Some(HeadlessRenderer::new(config)?);
     Ok(())
   }
 
   /// Renders the current widget tree to an RGBA image.
+  ///
+  /// Requires the driver to have been initialized via
+  /// `init_renderer()` or `with_rendering()`.
   pub fn render_to_image(
     &mut self,
-  ) -> anyhow::Result<image::RgbaImage> {
-    let r = self.renderer.as_mut().ok_or_else(|| {
-      anyhow::anyhow!("Call init_renderer() first")
+    data_provider: Option<&dyn DataProvider>,
+  ) -> anyhow::Result<RgbaImage> {
+    let r = self.headless.as_mut().ok_or_else(|| {
+      anyhow::anyhow!(
+        "Call init_renderer() or with_rendering() first"
+      )
     })?;
     r.render_to_image(
       &mut self.root,
       Some(&self.interaction),
-      None,
-    )
-  }
-
-  /// Renders with a data provider.
-  pub fn render_to_image_with_data(
-    &mut self,
-    data_provider: &dyn DataProvider,
-  ) -> anyhow::Result<image::RgbaImage> {
-    let r = self.renderer.as_mut().ok_or_else(|| {
-      anyhow::anyhow!("Call init_renderer() first")
-    })?;
-    r.render_to_image(
-      &mut self.root,
-      Some(&self.interaction),
-      Some(data_provider),
+      data_provider,
     )
   }
 
@@ -102,9 +124,26 @@ impl GloomyDriver {
     &mut self,
     path: impl AsRef<Path>,
   ) -> anyhow::Result<()> {
-    let img = self.render_to_image()?;
+    let img = self.render_to_image(None)?;
     img.save(path)?;
     Ok(())
+  }
+
+  /// Runs a full snapshot comparison cycle.
+  ///
+  /// Renders the current tree, compares against the stored
+  /// golden in `snapshot_dir`, and returns a structured diff
+  /// report.
+  pub fn snapshot_test(
+    &mut self,
+    name: &str,
+    snapshot_dir: impl AsRef<Path>,
+    data_provider: Option<&dyn DataProvider>,
+  ) -> anyhow::Result<DiffReport> {
+    let image = self.render_to_image(data_provider)?;
+    let mgr = SnapshotManager::new(snapshot_dir);
+    let config = DiffConfig::default();
+    mgr.compare(name, &image, &config, Some(&self.root))
   }
 
   /// Finds a widget by its ID.
@@ -470,7 +509,7 @@ pub fn assert_screenshot(
     dir.join(format!("{}_actual.png", name));
   let diff_path = dir.join(format!("{}_diff.png", name));
 
-  let actual = driver.render_to_image()?;
+  let actual = driver.render_to_image(None)?;
 
   if !golden_path.exists() {
     actual.save(&golden_path)?;
@@ -537,7 +576,8 @@ pub fn assert_screenshot(
     actual.save(&actual_path)?;
     diff_img.save(&diff_path)?;
     let total = (w as u64) * (h as u64);
-    let pct = (mismatch_count as f64 / total as f64) * 100.0;
+    let pct =
+      (mismatch_count as f64 / total as f64) * 100.0;
     anyhow::bail!(
       "Screenshot '{}': {}/{} pixels differ ({:.2}%). \
        Saved actual to {:?}, diff to {:?}",
@@ -587,8 +627,9 @@ pub fn apply_theme(
       *color = c.text;
     }
     Widget::Button { style, .. } => {
-      style.idle = gloomy_core::style::BoxStyle::fill(c.surface)
-        .with_radius(4.0);
+      style.idle =
+        gloomy_core::style::BoxStyle::fill(c.surface)
+          .with_radius(4.0);
       style.hover =
         gloomy_core::style::BoxStyle::fill(c.hover)
           .with_radius(4.0);
@@ -1042,7 +1083,7 @@ mod tests {
   fn test_render_without_init_fails() {
     let root = Widget::container();
     let mut driver = GloomyDriver::new(root, 200.0, 100.0);
-    let result = driver.render_to_image();
+    let result = driver.render_to_image(None);
     assert!(result.is_err());
     let msg = result.unwrap_err().to_string();
     assert!(
@@ -1967,7 +2008,7 @@ mod tests {
       return;
     }
 
-    let img = driver.render_to_image();
+    let img = driver.render_to_image(None);
     assert!(img.is_ok());
     let img = img.unwrap();
     assert_eq!(img.width(), 100);

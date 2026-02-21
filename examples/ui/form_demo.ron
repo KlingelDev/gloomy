@@ -30,8 +30,7 @@ Container(
         Button(
             text: "Submit",
             action: "submit",
-            background: (0.2, 0.6, 1.0, 1.0),
-            height: 40.0,
+            height: Some(40.0),
         ),
     ]
 )

@@ -1,0 +1,147 @@
+// Clock + Calendar — psychotropic.vim palette
+Container(
+  style: (
+    background: Some((0.063, 0.063, 0.063, 1.0)),
+  ),
+  padding: 40.0,
+  layout: (
+    direction: Row,
+    spacing: 40.0,
+    align_items: Stretch,
+    justify_content: Center,
+  ),
+  children: [
+    // Left: clock section
+    Container(
+      id: Some("clock_section"),
+      flex: 1.0,
+      layout: (
+        direction: Column,
+        spacing: 0.0,
+        align_items: Center,
+        justify_content: Center,
+      ),
+      children: [
+        // Time (updated each frame)
+        Label(
+          text: "00:00",
+          size: 96.0,
+          color: (0.965, 0.980, 0.980, 1.0),
+          text_align: Center,
+          font: Some("FiraMono"),
+        ),
+        Spacer(size: 8.0),
+        // Date (updated each frame)
+        Label(
+          text: "Saturday, February 21",
+          size: 20.0,
+          color: (0.620, 0.620, 0.620, 1.0),
+          text_align: Center,
+          font: Some("FiraMono"),
+        ),
+      ],
+    ),
+
+    // Vertical divider
+    Container(
+      width: Some(1.0),
+      style: (
+        background: Some((0.149, 0.149, 0.149, 1.0)),
+      ),
+    ),
+
+    // Right: calendar section
+    Container(
+      id: Some("calendar_section"),
+      flex: 1.0,
+      layout: (
+        direction: Column,
+        spacing: 0.0,
+        align_items: Stretch,
+        justify_content: Center,
+      ),
+      children: [
+        // Month header row
+        Container(
+          layout: (
+            direction: Row,
+            spacing: 12.0,
+            align_items: Center,
+            justify_content: Center,
+          ),
+          children: [
+            Button(
+              text: "<",
+              action: "prev_month",
+              width: Some(36.0),
+              height: Some(32.0),
+              font: Some("FiraMono"),
+              style: (
+                idle: (
+                  background:
+                    Some((0.180, 0.180, 0.180, 1.0)),
+                  corner_radii: (4.0, 4.0, 4.0, 4.0),
+                ),
+                hover: (
+                  background:
+                    Some((0.250, 0.250, 0.250, 1.0)),
+                  corner_radii: (4.0, 4.0, 4.0, 4.0),
+                ),
+                active: (
+                  background:
+                    Some((0.130, 0.130, 0.130, 1.0)),
+                  corner_radii: (4.0, 4.0, 4.0, 4.0),
+                ),
+                text_color: (0.600, 0.855, 0.239, 1.0),
+              ),
+            ),
+            Label(
+              text: "February 2026",
+              size: 22.0,
+              color: (0.976, 0.796, 0.322, 1.0),
+              text_align: Center,
+              width: 180.0,
+              font: Some("FiraMono"),
+            ),
+            Button(
+              text: ">",
+              action: "next_month",
+              width: Some(36.0),
+              height: Some(32.0),
+              font: Some("FiraMono"),
+              style: (
+                idle: (
+                  background:
+                    Some((0.180, 0.180, 0.180, 1.0)),
+                  corner_radii: (4.0, 4.0, 4.0, 4.0),
+                ),
+                hover: (
+                  background:
+                    Some((0.250, 0.250, 0.250, 1.0)),
+                  corner_radii: (4.0, 4.0, 4.0, 4.0),
+                ),
+                active: (
+                  background:
+                    Some((0.130, 0.130, 0.130, 1.0)),
+                  corner_radii: (4.0, 4.0, 4.0, 4.0),
+                ),
+                text_color: (0.600, 0.855, 0.239, 1.0),
+              ),
+            ),
+          ],
+        ),
+        Spacer(size: 12.0),
+        // Calendar grid (populated dynamically)
+        Container(
+          id: Some("calendar_grid"),
+          layout: (
+            direction: Grid(columns: 7),
+            spacing: 2.0,
+            align_items: Center,
+          ),
+          children: [],
+        ),
+      ],
+    ),
+  ],
+)
