@@ -84,15 +84,15 @@ fn build_calendar_grid(
   };
   children.clear();
 
-  // Psychotropic palette.
-  let turquoise = (0.498, 0.827, 0.647, 1.0);
-  let fg = (0.965, 0.980, 0.980, 1.0);
-  let blue = (0.129, 0.533, 0.937, 1.0);
+  // Kitty theme palette.
+  let dim = (0.620, 0.620, 0.620, 1.0);
+  let fg = (0.992, 0.988, 0.988, 1.0);
+  let tomato = (1.0, 0.376, 0.353, 1.0);
   let white = (1.0, 1.0, 1.0, 1.0);
 
   // Day-of-week headers.
   for hdr in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] {
-    children.push(cal_label(hdr, 14.0, 24.0, turquoise));
+    children.push(cal_label(hdr, 14.0, 24.0, dim));
   }
 
   // Blank cells before day 1.
@@ -119,7 +119,7 @@ fn build_calendar_grid(
         width: Some(36.0),
         height: Some(28.0),
         style: gloomy_core::style::BoxStyle {
-          background: Some(blue),
+          background: Some(tomato),
           corner_radii: [6.0; 4],
           ..Default::default()
         },
@@ -227,6 +227,11 @@ fn main() -> anyhow::Result<()> {
     })
     .on_draw(move |win: &mut GloomyWindow, ctx| {
       let mut s = draw_state.borrow_mut();
+
+      // #101010 background via clear color (sRGB → linear).
+      win.renderer.set_clear_color(
+        0.00486, 0.00486, 0.00486, 1.0,
+      );
       let now = Local::now();
 
       // Update clock labels.

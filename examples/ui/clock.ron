@@ -1,8 +1,6 @@
-// Clock + Calendar — psychotropic.vim palette
+// Clock + Calendar — kitty theme palette
 Container(
-  style: (
-    background: Some((0.063, 0.063, 0.063, 1.0)),
-  ),
+  style: (),
   padding: 40.0,
   layout: (
     direction: Row,
@@ -26,7 +24,7 @@ Container(
         Label(
           text: "00:00",
           size: 96.0,
-          color: (0.965, 0.980, 0.980, 1.0),
+          color: (0.694, 0.910, 0.412, 1.0),
           text_align: Center,
           font: Some("FiraMono"),
         ),
