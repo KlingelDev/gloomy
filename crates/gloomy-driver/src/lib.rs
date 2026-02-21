@@ -595,6 +595,14 @@ pub fn apply_theme(
       style.active =
         gloomy_core::style::BoxStyle::fill(c.active)
           .with_radius(4.0);
+      style.disabled =
+        gloomy_core::style::BoxStyle::fill((
+          c.surface.0,
+          c.surface.1,
+          c.surface.2,
+          0.4,
+        ))
+        .with_radius(4.0);
       style.text_color = c.text;
     }
     Widget::TextInput { style, .. } => {
@@ -638,10 +646,68 @@ pub fn apply_theme(
       style.label_color = c.text_secondary;
       style.value_color = c.text;
     }
-    Widget::Tab { tabs, .. } => {
+    Widget::Tab { style, tabs, .. } => {
+      style.background = c.surface;
+      style.selected_color = c.primary;
+      style.unselected_color = c.text_secondary;
       for tab in tabs.iter_mut() {
         apply_theme(&mut tab.content, theme);
       }
+    }
+    Widget::ListView { style, .. } => {
+      style.idle =
+        gloomy_core::style::BoxStyle::fill(c.surface);
+      style.hover =
+        gloomy_core::style::BoxStyle::fill(c.hover);
+      style.selected =
+        gloomy_core::style::BoxStyle::fill(c.primary);
+      style.text_color_idle = c.text;
+      style.text_color_selected = c.text;
+    }
+    Widget::DataGrid { style, .. } => {
+      style.header_background = c.surface;
+      style.header_text_color = c.text;
+      style.row_background = c.background;
+      style.alt_row_background = c.surface;
+      style.row_text_color = c.text;
+      style.hover_background = c.hover;
+      style.selected_background = c.primary;
+      style.grid_line_color = c.border;
+    }
+    Widget::NumberInput { style, .. } => {
+      style.background = Some(c.surface);
+      style.text_color = c.text;
+      style.spinner_color = c.text_secondary;
+    }
+    Widget::Autocomplete { style, .. } => {
+      style.background = Some(c.surface);
+      style.text_color = c.text;
+      style.cursor_color = c.text;
+      style.dropdown_background = Some(c.surface);
+      style.dropdown_text_color = c.text;
+      style.dropdown_highlight_color = c.hover;
+    }
+    Widget::DatePicker { style, .. } => {
+      style.background = Some(c.surface);
+      style.text_color = c.text;
+      style.placeholder_color = c.text_disabled;
+      style.calendar_background = Some(c.surface);
+      style.day_text_color = c.text;
+      style.selected_day_color = c.primary;
+      style.today_color = c.active;
+      style.day_hover_color = c.hover;
+      style.month_header_color = c.text;
+    }
+    Widget::Tree { style, .. } => {
+      style.text_color = c.text;
+      style.icon_color = c.text_secondary;
+      style.selected_background = c.primary;
+      style.hover_background = c.hover;
+    }
+    Widget::Scrollbar { style, .. } => {
+      style.track_color = c.background;
+      style.thumb_color = c.border;
+      style.thumb_hover_color = c.hover;
     }
     _ => {}
   }
