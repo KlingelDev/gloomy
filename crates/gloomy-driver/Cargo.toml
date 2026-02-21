@@ -8,3 +8,6 @@ gloomy-core = { path = "../gloomy-core" }
 glam = { version = "0.25" }
 anyhow = "1.0"
 log = "0.4"
+wgpu = "0.20"
+image = "0.25.9"
+pollster = "0.3"
