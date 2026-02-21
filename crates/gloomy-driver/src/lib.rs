@@ -304,4 +304,26 @@ mod tests {
     let found = driver.find("root");
     assert!(found.is_some());
   }
+
+  #[test]
+  fn find_returns_none_for_missing_id() {
+    let mut root = Widget::container();
+    if let Widget::Container { id, .. } = &mut root {
+      *id = Some("root".to_string());
+    }
+    let driver = GloomyDriver::new(root, 100.0, 100.0);
+    assert!(driver.find("nonexistent").is_none());
+  }
+
+  #[test]
+  fn render_to_image_without_renderer_returns_error() {
+    let root = Widget::container();
+    let mut driver = GloomyDriver::new(root, 100.0, 100.0);
+    let result = driver.render_to_image(None);
+    assert!(result.is_err());
+    assert!(
+      format!("{}", result.unwrap_err())
+        .contains("with_rendering")
+    );
+  }
 }
