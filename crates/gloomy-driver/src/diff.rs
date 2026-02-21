@@ -308,6 +308,10 @@ fn widget_id(widget: &Widget) -> Option<&str> {
     | Widget::Icon { id, .. } => Some(id),
     Widget::KpiCard { id, .. }
     | Widget::DataGrid { id, .. } => id.as_deref(),
+    Widget::Button { action, .. } => Some(action.as_str()),
+    Widget::Label { text, .. } => Some(text.as_str()),
+    Widget::RadioButton { value, .. } => Some(value.as_str()),
+    Widget::ListView { id, .. } => Some(id.as_str()),
     _ => None,
   }
 }
@@ -505,12 +509,11 @@ mod tests {
       Some(&root),
     );
     assert_eq!(report.regions.len(), 1);
-    // The deepest widget at (5, 5) with bounds covering it
-    // should be the button (no id on Button, so falls to root).
-    // Button has no `id` field in our widget_id fn, so root.
+    // The deepest widget at (5, 5) is the button; widget_id
+    // returns the button's action field.
     assert_eq!(
       report.regions[0].widget_id.as_deref(),
-      Some("root")
+      Some("act")
     );
   }
 

@@ -1,9 +1,15 @@
 //! CLI for visual regression testing of Gloomy UIs.
 //!
 //! Usage:
-//!   cargo run --example visual_test -- compare <name>
+//!   cargo run --example visual_test -- [--threshold N] compare <name>
+//!   cargo run --example visual_test -- [--threshold N] compare-all
 //!   cargo run --example visual_test -- update <name>
-//!   cargo run --example visual_test -- compare-all
+//!   cargo run --example visual_test -- update-all
+//!   cargo run --example visual_test -- render <path.ron>
+//!
+//! The `--threshold` flag sets the per-channel pixel difference
+//! tolerance (0–255, default 0). Useful for suppressing text
+//! rendering non-determinism.
 
 use gloomy_driver::diff::{DiffConfig, collect_widgets};
 use gloomy_driver::screenshot::HeadlessRenderer;
@@ -49,7 +55,10 @@ fn cmd_update(name: &str) -> anyhow::Result<()> {
   Ok(())
 }
 
-fn cmd_compare(name: &str) -> anyhow::Result<bool> {
+fn cmd_compare(
+  name: &str,
+  threshold: u8,
+) -> anyhow::Result<bool> {
   let mut renderer =
     HeadlessRenderer::new(DEFAULT_WIDTH, DEFAULT_HEIGHT, SCALE)?;
   let ron_path = ui_dir().join(format!("{name}.ron"));
@@ -57,7 +66,8 @@ fn cmd_compare(name: &str) -> anyhow::Result<bool> {
   let image =
     renderer.render_to_image(&mut root, None, None)?;
   let mgr = SnapshotManager::new(snapshot_dir());
-  let config = DiffConfig::default();
+  let config =
+    DiffConfig { threshold, ..Default::default() };
   let report =
     mgr.compare(name, &image, &config, Some(&root))?;
   println!(
@@ -67,7 +77,7 @@ fn cmd_compare(name: &str) -> anyhow::Result<bool> {
   Ok(report.passed)
 }
 
-fn cmd_compare_all() -> anyhow::Result<bool> {
+fn cmd_compare_all(threshold: u8) -> anyhow::Result<bool> {
   let mgr = SnapshotManager::new(snapshot_dir());
   let names = mgr.list_goldens()?;
   if names.is_empty() {
@@ -77,7 +87,8 @@ fn cmd_compare_all() -> anyhow::Result<bool> {
 
   let mut renderer =
     HeadlessRenderer::new(DEFAULT_WIDTH, DEFAULT_HEIGHT, SCALE)?;
-  let config = DiffConfig::default();
+  let config =
+    DiffConfig { threshold, ..Default::default() };
   let mut all_passed = true;
   let mut results = Vec::new();
 
@@ -111,6 +122,44 @@ fn cmd_compare_all() -> anyhow::Result<bool> {
   });
   println!("{}", serde_json::to_string_pretty(&summary)?);
   Ok(all_passed)
+}
+
+fn cmd_update_all() -> anyhow::Result<bool> {
+  let ui = ui_dir();
+  let mut names: Vec<String> = std::fs::read_dir(&ui)?
+    .filter_map(|e| e.ok())
+    .filter_map(|e| {
+      let path = e.path();
+      if path.extension().and_then(|s| s.to_str()) == Some("ron")
+      {
+        path
+          .file_stem()
+          .map(|s| s.to_string_lossy().to_string())
+      } else {
+        None
+      }
+    })
+    .collect();
+  names.sort();
+
+  if names.is_empty() {
+    eprintln!("No .ron files found in {}", ui.display());
+    return Ok(false);
+  }
+
+  let mut results = Vec::new();
+  for name in &names {
+    cmd_update(name)?;
+    results.push(name.clone());
+  }
+
+  let summary = serde_json::json!({
+    "action": "update-all",
+    "count": results.len(),
+    "names": results,
+  });
+  println!("{}", serde_json::to_string_pretty(&summary)?);
+  Ok(true)
 }
 
 fn cmd_render(ron_path_str: &str) -> anyhow::Result<bool> {
@@ -156,16 +205,19 @@ fn cmd_render(ron_path_str: &str) -> anyhow::Result<bool> {
 fn usage() {
   eprintln!("Usage:");
   eprintln!(
-    "  cargo run --example visual_test -- compare <name>"
+    "  visual_test [--threshold N] compare <name>"
   );
   eprintln!(
-    "  cargo run --example visual_test -- update <name>"
+    "  visual_test [--threshold N] compare-all"
   );
+  eprintln!("  visual_test update <name>");
+  eprintln!("  visual_test update-all");
+  eprintln!("  visual_test render <path.ron>");
+  eprintln!();
+  eprintln!("Options:");
   eprintln!(
-    "  cargo run --example visual_test -- compare-all"
-  );
-  eprintln!(
-    "  cargo run --example visual_test -- render <path.ron>"
+    "  --threshold N  Per-channel tolerance (0-255, \
+     default 0)"
   );
   eprintln!();
   eprintln!(
@@ -178,34 +230,54 @@ fn usage() {
 }
 
 fn main() {
-  let args: Vec<String> = std::env::args().collect();
-  if args.len() < 2 {
+  let raw_args: Vec<String> = std::env::args().collect();
+
+  // Parse --threshold N from anywhere before the subcommand.
+  let mut threshold: u8 = 0;
+  let mut args: Vec<String> = Vec::new();
+  let mut iter = raw_args[1..].iter();
+  while let Some(arg) = iter.next() {
+    if arg == "--threshold" {
+      match iter.next().and_then(|v| v.parse::<u8>().ok()) {
+        Some(v) => threshold = v,
+        None => {
+          eprintln!("--threshold requires a value (0-255)");
+          process::exit(2);
+        }
+      }
+    } else {
+      args.push(arg.clone());
+    }
+  }
+
+  if args.is_empty() {
     usage();
     process::exit(2);
   }
 
-  let result = match args[1].as_str() {
+  let result = match args[0].as_str() {
     "update" => {
-      if args.len() < 3 {
+      if args.len() < 2 {
         usage();
         process::exit(2);
       }
-      cmd_update(&args[2]).map(|_| true)
+      cmd_update(&args[1]).map(|_| true)
     }
+    "update-all" => cmd_update_all(),
     "compare" => {
-      if args.len() < 3 {
+      if args.len() < 2 {
         usage();
         process::exit(2);
       }
-      cmd_compare(&args[2])
+      cmd_compare(&args[1], threshold)
     }
-    "compare-all" => cmd_compare_all(),
+    "compare-all" => cmd_compare_all(threshold),
     "render" => {
-      if args.len() < 3 {
+      if args.len() < 2 {
         usage();
         process::exit(2);
       }
-      cmd_render(&args[2])
+      cmd_render(&args[1])
     }
     other => {
       eprintln!("Unknown command: {other}");
