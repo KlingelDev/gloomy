@@ -254,6 +254,522 @@ fn test_grid_intrinsic_height_sums_rows() {
   }
 }
 
+// Regression: get_fixed_size for Row must sum child widths, not max.
+#[test]
+fn test_row_intrinsic_width_sums_children() {
+  let row = Widget::Container {
+    id: Some("row".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      spacing: 0.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(80.0, 30.0),
+      make_grid_cell(60.0, 30.0),
+      make_grid_cell(40.0, 30.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![row],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.width, 180.0,
+      "Row intrinsic width must be sum of children (80+60+40)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Regression: get_fixed_size for Column must sum child heights.
+#[test]
+fn test_column_intrinsic_height_sums_children() {
+  let col = Widget::Container {
+    id: Some("col".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      spacing: 0.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(50.0, 40.0),
+      make_grid_cell(50.0, 60.0),
+      make_grid_cell(50.0, 20.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![col],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.height, 120.0,
+      "Column intrinsic height must be sum of children (40+60+20)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Row cross-axis (height) must be max of children, not sum.
+#[test]
+fn test_row_intrinsic_height_is_max() {
+  let row = Widget::Container {
+    id: Some("row".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      spacing: 0.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(50.0, 30.0),
+      make_grid_cell(50.0, 70.0),
+      make_grid_cell(50.0, 50.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![row],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.height, 70.0,
+      "Row intrinsic height must be max of children (70)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Column cross-axis (width) must be max of children, not sum.
+#[test]
+fn test_column_intrinsic_width_is_max() {
+  let col = Widget::Container {
+    id: Some("col".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      spacing: 0.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(40.0, 50.0),
+      make_grid_cell(90.0, 50.0),
+      make_grid_cell(60.0, 50.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![col],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.width, 90.0,
+      "Column intrinsic width must be max of children (90)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Row with spacing: intrinsic width includes inter-child spacing.
+#[test]
+fn test_row_intrinsic_width_includes_spacing() {
+  let row = Widget::Container {
+    id: Some("row".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      spacing: 10.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(50.0, 30.0),
+      make_grid_cell(50.0, 30.0),
+      make_grid_cell(50.0, 30.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![row],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  // 3 children × 50 + 2 gaps × 10 = 170
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.width, 170.0,
+      "Row width must include spacing (3×50 + 2×10 = 170)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Column with spacing: intrinsic height includes inter-child spacing.
+#[test]
+fn test_column_intrinsic_height_includes_spacing() {
+  let col = Widget::Container {
+    id: Some("col".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      spacing: 5.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(30.0, 40.0),
+      make_grid_cell(30.0, 40.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![col],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  // 2 children × 40 + 1 gap × 5 = 85
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.height, 85.0,
+      "Column height must include spacing (2×40 + 1×5 = 85)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Row with padding: intrinsic width includes 2×padding.
+#[test]
+fn test_row_intrinsic_width_includes_padding() {
+  let row = Widget::Container {
+    id: Some("row".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Row,
+      spacing: 0.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(100.0, 30.0),
+    ],
+    bounds: Default::default(),
+    padding: 8.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![row],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  // 100 + 2×8 padding = 116
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.width, 116.0,
+      "Row width must include padding (100 + 2×8 = 116)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
+// Grid intrinsic width = max_col_w × cols + spacing + padding.
+#[test]
+fn test_grid_intrinsic_width_uses_max_col_width() {
+  let grid = Widget::Container {
+    id: Some("grid".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Grid { columns: 3 },
+      spacing: 4.0,
+      ..Default::default()
+    },
+    children: vec![
+      make_grid_cell(30.0, 20.0),
+      make_grid_cell(50.0, 20.0),
+      make_grid_cell(40.0, 20.0),
+      make_grid_cell(50.0, 20.0),
+      make_grid_cell(30.0, 20.0),
+      make_grid_cell(50.0, 20.0),
+    ],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+  let root = Widget::Container {
+    id: Some("root".into()),
+    style: BoxStyle::default(),
+    width: None,
+    height: None,
+    layout: Layout {
+      direction: Direction::Column,
+      align_items: Align::Start,
+      ..Default::default()
+    },
+    children: vec![grid],
+    bounds: Default::default(),
+    padding: 0.0,
+    scrollable: false,
+    layout_cache: None,
+    render_cache: RefCell::new(None),
+    flex: 0.0,
+    grid_col: None,
+    grid_row: None,
+    col_span: 1,
+    row_span: 1,
+  };
+
+  // max_col_w=50, 3 cols → 50×3 + 2×4 spacing = 158
+  let result = test_layout(root, 800.0, 600.0);
+  if let Widget::Container { children, .. } = result {
+    let b = get_bounds(&children[0]);
+    assert_eq!(
+      b.width, 158.0,
+      "Grid width = max_col_w × cols + spacing (50×3 + 2×4 = 158)"
+    );
+  } else {
+    panic!("root is not a container");
+  }
+}
+
 // Regression: Spacer set_size must not overwrite declared size with
 // cross-axis value when parent uses Align::Stretch.
 #[test]

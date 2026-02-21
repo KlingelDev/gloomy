@@ -67,6 +67,20 @@ impl FontRegistry {
   }
 }
 
+/// Queued text item awaiting render.
+#[derive(Clone, Debug)]
+struct PendingText {
+  text: String,
+  pos: Vec2,
+  size: f32,
+  color: Vec4,
+  scissor: Option<(u32, u32, u32, u32)>,
+  align: HorizontalAlign,
+  font_name: Option<String>,
+  /// When set, enables vertical centering within bounds.
+  bounds: Option<(f32, f32)>,
+}
+
 /// Text renderer wrapping wgpu_text for TTF rendering.
 pub struct TextRenderer {
   brush: wgpu_text::TextBrush<FontArc>,
@@ -77,7 +91,7 @@ pub struct TextRenderer {
   glyph_cache: HashMap<(char, u32), f32>,
   width: u32,
   height: u32,
-  pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>)>,
+  pending: Vec<PendingText>,
   current_scissor: Option<(u32, u32, u32, u32)>,
   screen_size: Vec2,
   pub scale_factor: f32,
@@ -410,15 +424,39 @@ impl TextRenderer {
     align: HorizontalAlign,
     font_name: Option<&str>,
   ) {
-    self.pending.push((
-        text.to_string(),
-        pos,
-        size,
-        color,
-        self.current_scissor,
-        align,
-        font_name.map(|s| s.to_string()),
-    ));
+    self.pending.push(PendingText {
+      text: text.to_string(),
+      pos,
+      size,
+      color,
+      scissor: self.current_scissor,
+      align,
+      font_name: font_name.map(|s| s.to_string()),
+      bounds: None,
+    });
+  }
+
+  /// Queues text with vertical centering within given bounds.
+  pub fn draw_vcenter(
+    &mut self,
+    text: &str,
+    pos: Vec2,
+    size: f32,
+    color: Vec4,
+    align: HorizontalAlign,
+    font_name: Option<&str>,
+    bounds: (f32, f32),
+  ) {
+    self.pending.push(PendingText {
+      text: text.to_string(),
+      pos,
+      size,
+      color,
+      scissor: self.current_scissor,
+      align,
+      font_name: font_name.map(|s| s.to_string()),
+      bounds: Some(bounds),
+    });
   }
 
   /// Renders queued text.
@@ -444,38 +482,56 @@ impl TextRenderer {
       let height = self.height;
 
       // Sort by scissor so we can batch render passes.
-      self.pending.sort_by(|a, b| b.4.cmp(&a.4));
+      self.pending.sort_by(|a, b| {
+        b.scissor.cmp(&a.scissor)
+      });
 
       // Queue ALL sections in one call so glyph_brush
       // produces a single vertex buffer with all glyphs.
       let all_sections: Vec<Section> = self.pending.iter()
-        .map(|(text, pos, size, color, _scissor, align, font_name)| {
-          let font_id = font_name.as_deref()
+        .map(|p| {
+          let font_id = p.font_name.as_deref()
             .and_then(|name| self.fonts.get(name))
             .copied()
             .unwrap_or(FontId(0));
-          let scaled_x = pos.x * scale;
-          let scaled_y = pos.y * scale;
-          let scaled_size = size * scale;
-          Section::default()
+          let scaled_x = p.pos.x * scale;
+          let scaled_y = p.pos.y * scale;
+          let scaled_size = p.size * scale;
+          let mut section = Section::default()
             .add_text(
-              Text::new(text.as_str())
+              Text::new(p.text.as_str())
                 .with_scale(scaled_size)
-                .with_color([color.x, color.y, color.z, color.w])
+                .with_color([
+                  p.color.x, p.color.y,
+                  p.color.z, p.color.w,
+                ])
                 .with_font_id(font_id),
             )
-            .with_screen_position((scaled_x, scaled_y))
-            .with_layout(
+            .with_screen_position((scaled_x, scaled_y));
+          if let Some((bw, bh)) = p.bounds {
+            section = section
+              .with_bounds((bw * scale, bh * scale))
+              .with_layout(
+                wgpu_text::glyph_brush::Layout::default()
+                  .h_align(p.align)
+                  .v_align(
+                    wgpu_text::glyph_brush::VerticalAlign::Center,
+                  )
+              );
+          } else {
+            section = section.with_layout(
               wgpu_text::glyph_brush::Layout::default()
-                .h_align(*align)
-            )
+                .h_align(p.align)
+            );
+          }
+          section
         }).collect();
 
       self.brush.queue(device, queue, all_sections).unwrap();
 
       // Check if any pending items actually use scissors.
       let has_scissors =
-        self.pending.iter().any(|p| p.4.is_some());
+        self.pending.iter().any(|p| p.scissor.is_some());
 
       if !has_scissors {
         // Fast path: no scissors, single draw with fullscreen.
@@ -506,11 +562,11 @@ impl TextRenderer {
         // clips non-matching glyphs.
         let mut idx = 0;
         while idx < self.pending.len() {
-          let scissor = self.pending[idx].4;
+          let scissor = self.pending[idx].scissor;
           // Advance past items with same scissor.
           let mut end = idx + 1;
           while end < self.pending.len()
-            && self.pending[end].4 == scissor
+            && self.pending[end].scissor == scissor
           {
             end += 1;
           }
@@ -552,6 +608,22 @@ impl TextRenderer {
       
       self.pending.clear();
       self.current_scissor = None;
+  }
+
+  /// Returns (ascent, descent) for a font at given size.
+  /// Ascent is positive (above baseline), descent negative.
+  pub fn font_metrics(
+    &self,
+    size: f32,
+    font_name: Option<&str>,
+  ) -> (f32, f32) {
+    let font_id = font_name
+      .and_then(|name| self.fonts.get(name))
+      .copied()
+      .unwrap_or(FontId(0));
+    let font = &self.font_instances[font_id.0];
+    let scaled = font.as_scaled(size);
+    (scaled.ascent(), scaled.descent())
   }
 
   /// Measures the bounds of the given text.
@@ -629,7 +701,7 @@ impl TextRenderer {
   pub fn replay(&mut self, snapshot: &TextSnapshot, offset: Vec2) {
       for item in &snapshot.pending {
           let mut new_item = item.clone();
-          new_item.1 += offset;
+          new_item.pos += offset;
           self.pending.push(new_item);
       }
   }
@@ -637,5 +709,5 @@ impl TextRenderer {
 
 #[derive(Clone, Debug)]
 pub struct TextSnapshot {
-    pub pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>)>,
+    pub pending: Vec<PendingText>,
 }

@@ -697,6 +697,8 @@ mod tests {
           col_span: 1,
           row_span: 1,
           font: None,
+          background: None,
+          corner_radii: [0.0; 4],
         },
         Widget::RadioButton {
           group_id: "grp".to_string(),

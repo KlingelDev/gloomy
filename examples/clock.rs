@@ -8,6 +8,18 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use winit::event::ElementState;
 
+/// Convert sRGB gamma color tuple to linear for the GPU.
+fn lin(c: (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
+  let f = |v: f32| -> f32 {
+    if v <= 0.04045 {
+      v / 12.92
+    } else {
+      ((v + 0.055) / 1.055).powf(2.4)
+    }
+  };
+  (f(c.0), f(c.1), f(c.2), c.3)
+}
+
 struct AppState {
   ui: Widget,
   interaction: InteractionState,
@@ -51,6 +63,18 @@ fn cal_label(
   height: f32,
   color: (f32, f32, f32, f32),
 ) -> Widget {
+  cal_label_bg(text, size, height, color, None, [0.0; 4])
+}
+
+/// Label with optional background (for today highlight).
+fn cal_label_bg(
+  text: &str,
+  size: f32,
+  height: f32,
+  color: (f32, f32, f32, f32),
+  background: Option<(f32, f32, f32, f32)>,
+  corner_radii: [f32; 4],
+) -> Widget {
   Widget::Label {
     text: text.to_string(),
     x: 0.0,
@@ -66,6 +90,8 @@ fn cal_label(
     col_span: 1,
     row_span: 1,
     font: Some("FiraMono".to_string()),
+    background,
+    corner_radii,
   }
 }
 
@@ -84,15 +110,15 @@ fn build_calendar_grid(
   };
   children.clear();
 
-  // Psychotropic palette.
-  let turquoise = (0.498, 0.827, 0.647, 1.0);
-  let fg = (0.965, 0.980, 0.980, 1.0);
-  let blue = (0.129, 0.533, 0.937, 1.0);
+  // Kitty theme palette (sRGB → linear).
+  let dim = lin((0.620, 0.620, 0.620, 1.0));
+  let fg = lin((0.992, 0.988, 0.988, 1.0));
+  let tomato = lin((1.0, 0.376, 0.353, 1.0));
   let white = (1.0, 1.0, 1.0, 1.0);
 
   // Day-of-week headers.
   for hdr in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] {
-    children.push(cal_label(hdr, 14.0, 24.0, turquoise));
+    children.push(cal_label(hdr, 14.0, 24.0, dim));
   }
 
   // Blank cells before day 1.
@@ -112,41 +138,14 @@ fn build_calendar_grid(
       && day == today.day();
 
     if is_today {
-      children.push(Widget::Container {
-        id: None,
-        scrollable: false,
-        bounds: Default::default(),
-        width: Some(36.0),
-        height: Some(28.0),
-        style: gloomy_core::style::BoxStyle {
-          background: Some(blue),
-          corner_radii: [6.0; 4],
-          ..Default::default()
-        },
-        padding: 0.0,
-        layout: gloomy_core::layout::Layout {
-          direction:
-            gloomy_core::layout::Direction::Column,
-          align_items:
-            gloomy_core::layout::Align::Stretch,
-          justify_content:
-            gloomy_core::layout::Justify::Center,
-          ..Default::default()
-        },
-        flex: 0.0,
-        grid_col: None,
-        grid_row: None,
-        col_span: 1,
-        row_span: 1,
-        children: vec![cal_label(
-          &day.to_string(),
-          16.0,
-          20.0,
-          white,
-        )],
-        layout_cache: None,
-        render_cache: Default::default(),
-      });
+      children.push(cal_label_bg(
+        &day.to_string(),
+        16.0,
+        28.0,
+        white,
+        Some(tomato),
+        [6.0; 4],
+      ));
     } else {
       children.push(cal_label(
         &day.to_string(),
@@ -227,24 +226,24 @@ fn main() -> anyhow::Result<()> {
     })
     .on_draw(move |win: &mut GloomyWindow, ctx| {
       let mut s = draw_state.borrow_mut();
+
+      // #101010 background via clear color (sRGB → linear).
+      win.renderer.set_clear_color(
+        0.00486, 0.00486, 0.00486, 1.0,
+      );
       let now = Local::now();
 
-      // Update clock labels.
+      // Update clock label (bold).
       if let Some(Widget::Container {
         children, ..
       }) = find_widget_mut(&mut s.ui, "clock_section")
       {
-        // children[0] = time label
         if let Some(Widget::Label { text, .. }) =
           children.get_mut(0)
         {
-          *text = now.format("%H:%M").to_string();
-        }
-        // children[2] = date label (after Spacer)
-        if let Some(Widget::Label { text, .. }) =
-          children.get_mut(2)
-        {
-          *text = now.format("%A, %B %-d").to_string();
+          *text = format!(
+            "<b>{}</b>", now.format("%H:%M")
+          );
         }
       }
 
