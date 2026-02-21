@@ -1076,3 +1076,220 @@ fn get_row_span(widget: &Widget) -> usize {
     Widget::Chart { row_span, .. } => *row_span,
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::layout::{Align, Direction, Layout};
+  use crate::widget::{Orientation, Widget, WidgetBounds};
+
+  // Builds a column Container with the given children and
+  // dimensions, then runs compute_layout on it.
+  fn column_container(
+    w: f32,
+    h: f32,
+    children: Vec<Widget>,
+  ) -> Widget {
+    let mut root = Widget::Container {
+      id: None,
+      scrollable: false,
+      bounds: WidgetBounds { x: 0.0, y: 0.0, width: w, height: h },
+      width: Some(w),
+      height: Some(h),
+      style: crate::style::BoxStyle::default(),
+      padding: 0.0,
+      layout: Layout {
+        direction: Direction::Column,
+        align_items: Align::Stretch,
+        ..Default::default()
+      },
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+      children,
+      layout_cache: None,
+      render_cache: std::cell::RefCell::new(None),
+    };
+    compute_layout(&mut root, 0.0, 0.0, w, h);
+    root
+  }
+
+  // ── Spacer flex fix ───────────────────────────────────
+
+  #[test]
+  fn test_spacer_flex_receives_full_height() {
+    // A single Spacer with flex=1.0 should consume the
+    // entire column height after the fix.
+    let spacer = Widget::Spacer {
+      size: 10.0,
+      flex: 1.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let root = column_container(100.0, 300.0, vec![spacer]);
+    if let Widget::Container { children, .. } = &root {
+      if let Widget::Spacer { size, .. } = &children[0] {
+        // With flex fix, Spacer gets the full 300px.
+        // Without fix, it would stay at 10px (fixed).
+        assert!(
+          *size > 10.0,
+          "Spacer should grow beyond its initial \
+          size; got {}",
+          size,
+        );
+      } else {
+        panic!("Expected Spacer child");
+      }
+    } else {
+      panic!("Expected Container");
+    }
+  }
+
+  #[test]
+  fn test_spacer_flex_splits_space_with_sibling() {
+    // Two flex=1.0 children (Container + Spacer) should
+    // each get half the parent height.
+    let child_container = Widget::Container {
+      id: None,
+      scrollable: false,
+      bounds: WidgetBounds::default(),
+      width: None,
+      height: None,
+      style: crate::style::BoxStyle::default(),
+      padding: 0.0,
+      layout: Layout::default(),
+      flex: 1.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+      children: vec![],
+      layout_cache: None,
+      render_cache: std::cell::RefCell::new(None),
+    };
+    let spacer = Widget::Spacer {
+      size: 10.0,
+      flex: 1.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let root = column_container(
+      100.0,
+      200.0,
+      vec![child_container, spacer],
+    );
+    if let Widget::Container { children, .. } = &root {
+      // Container child should get ~100px (half of 200).
+      if let Widget::Container { bounds, .. } = &children[0]
+      {
+        assert!(
+          (bounds.height - 100.0).abs() < 0.1,
+          "Container should get ~100px, got {}",
+          bounds.height,
+        );
+      } else {
+        panic!("Expected Container child");
+      }
+      // Spacer should get ~100px too.
+      if let Widget::Spacer { size, .. } = &children[1] {
+        assert!(
+          *size > 50.0,
+          "Spacer should get ~100px, got {}",
+          size,
+        );
+      } else {
+        panic!("Expected Spacer child");
+      }
+    } else {
+      panic!("Expected Container");
+    }
+  }
+
+  // ── Scrollbar flex fix ────────────────────────────────
+
+  #[test]
+  fn test_scrollbar_flex_receives_height_in_column() {
+    // Vertical Scrollbar with flex=1.0 in a column should
+    // have its bounds.height set to the flex allocation.
+    let sb = Widget::Scrollbar {
+      bounds: WidgetBounds::default(),
+      content_size: 1000.0,
+      viewport_size: 200.0,
+      scroll_offset: 0.0,
+      orientation: Orientation::Vertical,
+      style: Default::default(),
+      flex: 1.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let root = column_container(100.0, 300.0, vec![sb]);
+    if let Widget::Container { children, .. } = &root {
+      if let Widget::Scrollbar { bounds, .. } = &children[0]
+      {
+        // With flex fix, Scrollbar gets the full 300px
+        // height from the flex allocation.
+        assert!(
+          bounds.height > 100.0,
+          "Scrollbar should grow with flex; got height={}",
+          bounds.height,
+        );
+      } else {
+        panic!("Expected Scrollbar child");
+      }
+    } else {
+      panic!("Expected Container");
+    }
+  }
+
+  // ── Divider flex fix ──────────────────────────────────
+
+  #[test]
+  fn test_divider_flex_shifts_sibling_position() {
+    // A flex=1.0 Divider occupies its flex allocation in
+    // the main-axis accounting, pushing later siblings.
+    // With flex fix: Divider (flex=1.0) gets all 200px,
+    // so the Label y position > 100.
+    // Without fix: Divider is fixed (~17px), Label at ~17.
+    let divider = Widget::Divider {
+      bounds: WidgetBounds::default(),
+      orientation: Orientation::Horizontal,
+      thickness: 1.0,
+      color: (0.3, 0.3, 0.3, 1.0),
+      margin: 8.0,
+      flex: 1.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let label = Widget::label("after");
+    let root =
+      column_container(100.0, 300.0, vec![divider, label]);
+    if let Widget::Container { children, .. } = &root {
+      if let Widget::Label { y, .. } = &children[1] {
+        // With fix: flex Divider consumes its allocated
+        // height in positioning, so label starts after it.
+        // 300px available, all going to flex Divider.
+        // Label lands at y=300 (or near it).
+        assert!(
+          *y > 100.0,
+          "Label should be pushed down by flex Divider; \
+          got y={}",
+          y,
+        );
+      } else {
+        panic!("Expected Label child");
+      }
+    } else {
+      panic!("Expected Container");
+    }
+  }
+}

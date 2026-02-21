@@ -2182,4 +2182,413 @@ mod tests {
       assert_ne!(c_dark, c_light);
     }
   }
+
+  // ── Button disabled state theming ─────────────────────
+
+  #[test]
+  fn test_apply_theme_button_disabled_state() {
+    let mut btn = make_button("B", "act");
+    let theme = Theme::dark();
+    apply_theme(&mut btn, &theme);
+    if let Widget::Button { style, .. } = &btn {
+      let c = &theme.colors;
+      // disabled uses surface color at 40% alpha.
+      let expected_bg =
+        (c.surface.0, c.surface.1, c.surface.2, 0.4);
+      assert_eq!(
+        style.disabled.background,
+        Some(expected_bg),
+      );
+      assert_eq!(style.disabled.corner_radii, [4.0; 4]);
+    } else {
+      panic!("Expected Button");
+    }
+  }
+
+  // ── Tab style theming ─────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_tab_style() {
+    use gloomy_core::widget::{TabItem, TabStyle};
+    let tab_item = TabItem {
+      title: "Tab 1".to_string(),
+      content: Box::new(Widget::label("content")),
+    };
+    let mut tab = Widget::tab(
+      "t1",
+      vec![tab_item],
+      Orientation::Horizontal,
+      TabStyle::default(),
+    );
+    let theme = Theme::dark();
+    apply_theme(&mut tab, &theme);
+    if let Widget::Tab { style, .. } = &tab {
+      assert_eq!(style.background, theme.colors.surface);
+      assert_eq!(
+        style.selected_color,
+        theme.colors.primary,
+      );
+      assert_eq!(
+        style.unselected_color,
+        theme.colors.text_secondary,
+      );
+    } else {
+      panic!("Expected Tab");
+    }
+  }
+
+  #[test]
+  fn test_apply_theme_tab_recurses_content() {
+    use gloomy_core::widget::{TabItem, TabStyle};
+    let tab_item = TabItem {
+      title: "Tab".to_string(),
+      content: Box::new(Widget::label("text")),
+    };
+    let mut tab = Widget::tab(
+      "t2",
+      vec![tab_item],
+      Orientation::Horizontal,
+      TabStyle::default(),
+    );
+    let theme = Theme::dark();
+    apply_theme(&mut tab, &theme);
+    if let Widget::Tab { tabs, .. } = &tab {
+      if let Widget::Label { color, .. } =
+        tabs[0].content.as_ref()
+      {
+        assert_eq!(*color, theme.colors.text);
+      } else {
+        panic!("Expected Label in tab content");
+      }
+    } else {
+      panic!("Expected Tab");
+    }
+  }
+
+  // ── ListView theming ──────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_listview() {
+    let mut lv = Widget::ListView {
+      id: "lv1".to_string(),
+      items: vec!["A".to_string()],
+      selected_index: None,
+      style: Default::default(),
+      bounds: WidgetBounds::default(),
+      width: Some(200.0),
+      height: Some(100.0),
+      layout: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+      scroll_offset: 0.0,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut lv, &theme);
+    if let Widget::ListView { style, .. } = &lv {
+      assert_eq!(
+        style.idle.background,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(
+        style.hover.background,
+        Some(theme.colors.hover),
+      );
+      assert_eq!(
+        style.selected.background,
+        Some(theme.colors.primary),
+      );
+      assert_eq!(style.text_color_idle, theme.colors.text);
+      assert_eq!(
+        style.text_color_selected,
+        theme.colors.text,
+      );
+    } else {
+      panic!("Expected ListView");
+    }
+  }
+
+  // ── DataGrid theming ──────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_datagrid() {
+    use gloomy_core::datagrid::SelectionMode;
+    let mut dg = Widget::DataGrid {
+      id: Some("dg1".to_string()),
+      bounds: WidgetBounds::default(),
+      columns: vec![],
+      data_source_id: None,
+      header_height: 30.0,
+      row_height: 24.0,
+      striped: true,
+      selection_mode: SelectionMode::default(),
+      show_vertical_lines: false,
+      show_horizontal_lines: false,
+      selected_rows: vec![],
+      sort_column: None,
+      sort_direction: None,
+      style: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut dg, &theme);
+    if let Widget::DataGrid { style, .. } = &dg {
+      assert_eq!(
+        style.header_background,
+        theme.colors.surface,
+      );
+      assert_eq!(
+        style.header_text_color,
+        theme.colors.text,
+      );
+      assert_eq!(
+        style.row_background,
+        theme.colors.background,
+      );
+      assert_eq!(
+        style.alt_row_background,
+        theme.colors.surface,
+      );
+      assert_eq!(style.row_text_color, theme.colors.text);
+      assert_eq!(
+        style.hover_background,
+        theme.colors.hover,
+      );
+      assert_eq!(
+        style.selected_background,
+        theme.colors.primary,
+      );
+      assert_eq!(
+        style.grid_line_color,
+        theme.colors.border,
+      );
+    } else {
+      panic!("Expected DataGrid");
+    }
+  }
+
+  // ── NumberInput theming ───────────────────────────────
+
+  #[test]
+  fn test_apply_theme_number_input() {
+    let mut ni = Widget::NumberInput {
+      id: "ni1".to_string(),
+      value: 0.0,
+      min: None,
+      max: None,
+      step: 1.0,
+      precision: 0,
+      show_spinner: true,
+      bounds: WidgetBounds::default(),
+      validation: None,
+      style: Default::default(),
+      width: 100.0,
+      height: 32.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut ni, &theme);
+    if let Widget::NumberInput { style, .. } = &ni {
+      assert_eq!(
+        style.background,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(style.text_color, theme.colors.text);
+      assert_eq!(
+        style.spinner_color,
+        theme.colors.text_secondary,
+      );
+    } else {
+      panic!("Expected NumberInput");
+    }
+  }
+
+  // ── Autocomplete theming ──────────────────────────────
+
+  #[test]
+  fn test_apply_theme_autocomplete() {
+    let mut ac = Widget::Autocomplete {
+      id: "ac1".to_string(),
+      value: "".to_string(),
+      placeholder: "Search".to_string(),
+      suggestions: vec![],
+      max_visible: 5,
+      bounds: WidgetBounds::default(),
+      style: Default::default(),
+      validation: None,
+      width: 200.0,
+      height: 32.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut ac, &theme);
+    if let Widget::Autocomplete { style, .. } = &ac {
+      assert_eq!(
+        style.background,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(style.text_color, theme.colors.text);
+      assert_eq!(style.cursor_color, theme.colors.text);
+      assert_eq!(
+        style.dropdown_background,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(
+        style.dropdown_text_color,
+        theme.colors.text,
+      );
+      assert_eq!(
+        style.dropdown_highlight_color,
+        theme.colors.hover,
+      );
+    } else {
+      panic!("Expected Autocomplete");
+    }
+  }
+
+  // ── DatePicker theming ────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_datepicker() {
+    let mut dp = Widget::DatePicker {
+      id: "dp1".to_string(),
+      value: None,
+      placeholder: "Date".to_string(),
+      min_date: None,
+      max_date: None,
+      format: "%Y-%m-%d".to_string(),
+      bounds: WidgetBounds::default(),
+      style: Default::default(),
+      validation: None,
+      width: 150.0,
+      height: 32.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut dp, &theme);
+    if let Widget::DatePicker { style, .. } = &dp {
+      assert_eq!(
+        style.background,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(style.text_color, theme.colors.text);
+      assert_eq!(
+        style.placeholder_color,
+        theme.colors.text_disabled,
+      );
+      assert_eq!(
+        style.calendar_background,
+        Some(theme.colors.surface),
+      );
+      assert_eq!(
+        style.day_text_color,
+        theme.colors.text,
+      );
+      assert_eq!(
+        style.selected_day_color,
+        theme.colors.primary,
+      );
+      assert_eq!(style.today_color, theme.colors.active);
+      assert_eq!(
+        style.day_hover_color,
+        theme.colors.hover,
+      );
+      assert_eq!(
+        style.month_header_color,
+        theme.colors.text,
+      );
+    } else {
+      panic!("Expected DatePicker");
+    }
+  }
+
+  // ── Tree theming ──────────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_tree() {
+    let mut tree = Widget::Tree {
+      id: Some("tr1".to_string()),
+      bounds: WidgetBounds::default(),
+      root_nodes: vec![],
+      selected_id: None,
+      expanded_ids: Default::default(),
+      style: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut tree, &theme);
+    if let Widget::Tree { style, .. } = &tree {
+      assert_eq!(style.text_color, theme.colors.text);
+      assert_eq!(
+        style.icon_color,
+        theme.colors.text_secondary,
+      );
+      assert_eq!(
+        style.selected_background,
+        theme.colors.primary,
+      );
+      assert_eq!(
+        style.hover_background,
+        theme.colors.hover,
+      );
+    } else {
+      panic!("Expected Tree");
+    }
+  }
+
+  // ── Scrollbar theming ─────────────────────────────────
+
+  #[test]
+  fn test_apply_theme_scrollbar() {
+    let mut sb = Widget::Scrollbar {
+      bounds: WidgetBounds::default(),
+      content_size: 1000.0,
+      viewport_size: 200.0,
+      scroll_offset: 0.0,
+      orientation: Orientation::Vertical,
+      style: Default::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    let theme = Theme::dark();
+    apply_theme(&mut sb, &theme);
+    if let Widget::Scrollbar { style, .. } = &sb {
+      assert_eq!(
+        style.track_color,
+        theme.colors.background,
+      );
+      assert_eq!(style.thumb_color, theme.colors.border);
+      assert_eq!(
+        style.thumb_hover_color,
+        theme.colors.hover,
+      );
+    } else {
+      panic!("Expected Scrollbar");
+    }
+  }
 }
