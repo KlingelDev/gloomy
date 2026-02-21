@@ -60,13 +60,18 @@ impl HeadlessRenderer {
     )
     .context("failed to create wgpu device")?;
 
-    let renderer = GloomyRenderer::new(
+    let mut renderer = GloomyRenderer::new(
       &device,
       HEADLESS_FORMAT,
       width,
       height,
       scale_factor,
     );
+    // Write initial screen_size to GPU uniform buffers.
+    // GloomyRenderer::new sets struct fields but doesn't
+    // write uniforms; the windowed path relies on resize()
+    // being called on first frame.
+    renderer.resize(&queue, width, height, scale_factor);
 
     Ok(Self { device, queue, renderer, width, height })
   }
