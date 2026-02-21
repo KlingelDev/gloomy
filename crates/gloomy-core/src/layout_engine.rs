@@ -1156,12 +1156,19 @@ mod tests {
     root
   }
 
-  // ── Spacer flex fix ───────────────────────────────────
+  // ── Spacer flex layout behaviour ──────────────────────
+  //
+  // set_size() is now a no-op for Spacer (upstream fix:
+  // "don't corrupt with cross-axis Stretch values"). The
+  // layout engine still advances current_main by the flex-
+  // allocated amount, so siblings are positioned correctly;
+  // but Spacer.size is never written back.
 
   #[test]
-  fn test_spacer_flex_receives_full_height() {
-    // A single Spacer with flex=1.0 should consume the
-    // entire column height after the fix.
+  fn test_spacer_flex_size_not_mutated_by_layout() {
+    // A Spacer with flex=1.0 inside a column consumes flex
+    // space from the layout budget, but its declared size
+    // field must remain unchanged (set_size is a no-op).
     let spacer = Widget::Spacer {
       size: 10.0,
       flex: 1.0,
@@ -1173,12 +1180,12 @@ mod tests {
     let root = column_container(100.0, 300.0, vec![spacer]);
     if let Widget::Container { children, .. } = &root {
       if let Widget::Spacer { size, .. } = &children[0] {
-        // With flex fix, Spacer gets the full 300px.
-        // Without fix, it would stay at 10px (fixed).
-        assert!(
-          *size > 10.0,
-          "Spacer should grow beyond its initial \
-          size; got {}",
+        // size is preserved; layout does not write back.
+        assert_eq!(
+          *size,
+          10.0,
+          "Spacer.size must not be mutated by layout; \
+          got {}",
           size,
         );
       } else {
@@ -1190,9 +1197,11 @@ mod tests {
   }
 
   #[test]
-  fn test_spacer_flex_splits_space_with_sibling() {
-    // Two flex=1.0 children (Container + Spacer) should
-    // each get half the parent height.
+  fn test_spacer_flex_sibling_receives_correct_space() {
+    // Container (flex=1.0) + Spacer (flex=1.0) in a 200px
+    // column: the Container must receive half (100px) because
+    // both widgets consume equal flex budget. Spacer.size
+    // itself stays at its declared value.
     let child_container = Widget::Container {
       id: None,
       scrollable: false,
@@ -1225,7 +1234,7 @@ mod tests {
       vec![child_container, spacer],
     );
     if let Widget::Container { children, .. } = &root {
-      // Container child should get ~100px (half of 200).
+      // Container should receive half the flex budget.
       if let Widget::Container { bounds, .. } = &children[0]
       {
         assert!(
@@ -1236,11 +1245,12 @@ mod tests {
       } else {
         panic!("Expected Container child");
       }
-      // Spacer should get ~100px too.
+      // Spacer.size is not written back by set_size.
       if let Widget::Spacer { size, .. } = &children[1] {
-        assert!(
-          *size > 50.0,
-          "Spacer should get ~100px, got {}",
+        assert_eq!(
+          *size,
+          10.0,
+          "Spacer.size must not be mutated; got {}",
           size,
         );
       } else {
