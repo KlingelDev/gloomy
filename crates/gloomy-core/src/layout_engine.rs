@@ -548,31 +548,70 @@ fn calculate_tree_height_recursive(nodes: &[crate::tree::TreeNode], expanded: &s
 // Helper to get fixed/intrinsic size
 fn get_fixed_size(widget: &Widget) -> (f32, f32) {
   match widget {
-    Widget::Container { bounds, width, height, padding, children, .. } => {
+    Widget::Container {
+      bounds, width, height, padding, children, layout, ..
+    } => {
         let mut w = width.unwrap_or(0.0);
         let mut h = height.unwrap_or(0.0);
-        
-        if w <= 0.0 && !children.is_empty() {
+
+        if let Direction::Grid { columns: cols } = layout.direction
+        {
+          // Grid: sum row heights + spacing.
+          if cols > 0 && !children.is_empty() {
+            let num_rows =
+              (children.len() + cols - 1) / cols;
+            let mut row_heights = vec![0.0f32; num_rows];
+            for (i, child) in children.iter().enumerate() {
+              let row = i / cols;
+              let (cw, ch) = get_fixed_size(child);
+              row_heights[row] = row_heights[row].max(ch);
+              if w <= 0.0 {
+                // Also track max column width.
+                w = w.max(cw);
+              }
+            }
+            if w <= 0.0 {
+              w = w * cols as f32
+                + if cols > 1 {
+                    (cols - 1) as f32 * layout.spacing
+                  } else {
+                    0.0
+                  }
+                + padding * 2.0;
+            }
+            if h <= 0.0 {
+              h = row_heights.iter().sum::<f32>()
+                + if num_rows > 1 {
+                    (num_rows - 1) as f32 * layout.spacing
+                  } else {
+                    0.0
+                  }
+                + padding * 2.0;
+            }
+          }
+        } else {
+          // Non-grid: max of children (existing logic).
+          if w <= 0.0 && !children.is_empty() {
             let mut max_w = 0.0f32;
             for child in children {
-                let (cw, _) = get_fixed_size(child);
-                max_w = max_w.max(cw);
+              let (cw, _) = get_fixed_size(child);
+              max_w = max_w.max(cw);
             }
             w = max_w + padding * 2.0;
-        }
-        
-        if h <= 0.0 && !children.is_empty() {
+          }
+          if h <= 0.0 && !children.is_empty() {
             let mut max_h = 0.0f32;
             for child in children {
-                let (_, ch) = get_fixed_size(child);
-                max_h = max_h.max(ch);
+              let (_, ch) = get_fixed_size(child);
+              max_h = max_h.max(ch);
             }
             h = max_h + padding * 2.0;
+          }
         }
-        
+
         if w <= 0.0 { w = bounds.width; }
         if h <= 0.0 { h = bounds.height; }
-        
+
         (w, h)
     },
     Widget::Image { width, height, .. } => {
@@ -720,8 +759,9 @@ fn set_size(widget: &mut Widget, w: f32, h: f32) {
       bounds.width = w;
       bounds.height = h;
     }
-    Widget::Spacer { size, .. } => {
-      *size = w.max(h);
+    Widget::Spacer { .. } => {
+      // Spacers keep their declared size — don't corrupt
+      // with cross-axis values from Stretch alignment.
     }
     Widget::Divider { bounds, orientation, thickness, margin, .. } => {
       // Set bounds based on orientation

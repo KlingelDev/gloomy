@@ -669,6 +669,91 @@ mod tests {
     );
   }
 
+  // widget_id() for the newly-wired variants: Label → text,
+  // RadioButton → value, ListView → id.
+  #[test]
+  fn widget_id_mapped_for_label_radiobutton_listview() {
+    let mut root = Widget::container();
+    if let Widget::Container {
+      id, children, bounds, ..
+    } = &mut root
+    {
+      *id = Some("root".to_string());
+      bounds.width = 200.0;
+      bounds.height = 200.0;
+      *children = vec![
+        Widget::Label {
+          text: "hello".to_string(),
+          x: 0.0,
+          y: 0.0,
+          width: 60.0,
+          height: 20.0,
+          size: 14.0,
+          color: (0.0, 0.0, 0.0, 1.0),
+          text_align: Default::default(),
+          flex: 0.0,
+          grid_col: None,
+          grid_row: None,
+          col_span: 1,
+          row_span: 1,
+          font: None,
+        },
+        Widget::RadioButton {
+          group_id: "grp".to_string(),
+          value: "opt_a".to_string(),
+          selected: false,
+          label: "Option A".to_string(),
+          style: Default::default(),
+          bounds: WidgetBounds {
+            x: 0.0,
+            y: 30.0,
+            width: 60.0,
+            height: 20.0,
+          },
+          layout: Default::default(),
+          flex: 0.0,
+          grid_col: None,
+          grid_row: None,
+          col_span: 1,
+          row_span: 1,
+        },
+        Widget::ListView {
+          id: "list1".to_string(),
+          items: vec!["a".to_string()],
+          selected_index: None,
+          style: Default::default(),
+          bounds: WidgetBounds {
+            x: 0.0,
+            y: 60.0,
+            width: 60.0,
+            height: 40.0,
+          },
+          width: None,
+          height: None,
+          layout: Default::default(),
+          flex: 0.0,
+          grid_col: None,
+          grid_row: None,
+          col_span: 1,
+          row_span: 1,
+          scroll_offset: 0.0,
+        },
+      ];
+    }
+
+    let info = collect_widgets(&root);
+    assert_eq!(info.children.len(), 3);
+    // Label: id = text content.
+    assert_eq!(info.children[0].widget_type, "Label");
+    assert_eq!(info.children[0].id.as_deref(), Some("hello"));
+    // RadioButton: id = value field.
+    assert_eq!(info.children[1].widget_type, "RadioButton");
+    assert_eq!(info.children[1].id.as_deref(), Some("opt_a"));
+    // ListView: id = id field.
+    assert_eq!(info.children[2].widget_type, "ListView");
+    assert_eq!(info.children[2].id.as_deref(), Some("list1"));
+  }
+
   // cell_size=0 is clamped to 1 internally; must not panic.
   #[test]
   fn cell_size_zero_does_not_panic() {

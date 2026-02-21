@@ -26,6 +26,10 @@ const ROBOTO_CONDENSED_BOLD: &[u8] = include_bytes!("../../../assets/fonts/googl
 const ROBOTO_CONDENSED_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/RobotoCondensed-Italic.ttf");
 const ROBOTO_CONDENSED_BOLD_ITALIC: &[u8] = include_bytes!("../../../assets/fonts/google/RobotoCondensed-BoldItalic.ttf");
 
+// FiraMono font family
+const FIRA_MONO_REGULAR: &[u8] = include_bytes!("../../../assets/fonts/fira/FiraMonoNerdFont_Regular.otf");
+const FIRA_MONO_BOLD: &[u8] = include_bytes!("../../../assets/fonts/fira/FiraMonoNerdFont_Bold.otf");
+
 /// Main renderer managing GPU resources and render passes.
 pub struct GloomyRenderer {
   primitives: PrimitiveRenderer,
@@ -62,7 +66,7 @@ impl GloomyRenderer {
     let primitives = PrimitiveRenderer::new(device, format, width, height);
     let overlay_primitives = PrimitiveRenderer::new(device, format, width, height);
     
-    // Load all available font families (10 fonts total)
+    // Load all available font families (12 fonts total)
     let text = TextRenderer::new_with_all_families(
       device,
       format,
@@ -78,6 +82,8 @@ impl GloomyRenderer {
       ROBOTO_CONDENSED_BOLD,
       ROBOTO_CONDENSED_ITALIC,
       ROBOTO_CONDENSED_BOLD_ITALIC,
+      FIRA_MONO_REGULAR,
+      FIRA_MONO_BOLD,
     );
 
     // Initial output text renderer for overlay (lightweight, default font only)
