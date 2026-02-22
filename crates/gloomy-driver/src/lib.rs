@@ -416,17 +416,6 @@ fn dump_text_recursive(
         });
       }
     }
-    Widget::Chart { title, .. } if !title.is_empty() => {
-      entries.push(TextEntry {
-        text: title.clone(),
-        x: abs_x,
-        y: abs_y,
-        width: b.width,
-        height: b.height,
-        widget_id: id,
-        widget_type: wtype.to_string(),
-      });
-    }
     Widget::NumberInput { value, .. } => {
       entries.push(TextEntry {
         text: value.to_string(),
@@ -788,7 +777,6 @@ fn widget_id(widget: &Widget) -> Option<&str> {
     Widget::DataGrid { id, .. } => id.as_deref(),
     Widget::ListView { id, .. } => Some(id),
     Widget::Icon { id, .. } => Some(id),
-    Widget::Chart { id, .. } => id.as_deref(),
     Widget::Tree { id, .. } => id.as_deref(),
     _ => None,
   }
@@ -819,7 +807,6 @@ fn widget_type_name(widget: &Widget) -> &'static str {
     Widget::Slider { .. } => "Slider",
     Widget::Image { .. } => "Image",
     Widget::Icon { .. } => "Icon",
-    Widget::Chart { .. } => "Chart",
   }
 }
 
@@ -2736,6 +2723,39 @@ mod tests {
         );
       }
     }
+  }
+
+  // ── Chart variant removal ─────────────────────────────
+
+  #[test]
+  fn test_chart_variant_removed_from_serde() {
+    // Widget::Chart was removed; its JSON must fail to deserialize.
+    let result =
+      serde_json::from_str::<Widget>(r#"{"Chart": {}}"#);
+    assert!(
+      result.is_err(),
+      "deserializing Chart JSON should fail after removal"
+    );
+  }
+
+  #[test]
+  fn test_icon_widget_type_name_after_chart_removal() {
+    // Icon was the last match arm before Chart was removed.
+    // Verify widget_type_name still returns "Icon" correctly.
+    let icon = Widget::Icon {
+      id: "icon1".to_string(),
+      icon_name: "star".to_string(),
+      size: 24.0,
+      color: None,
+      bounds: WidgetBounds::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    assert_eq!(widget_type_name(&icon), "Icon");
+    assert_eq!(widget_id(&icon), Some("icon1"));
   }
 
   // ── Scrollbar theming ─────────────────────────────────
