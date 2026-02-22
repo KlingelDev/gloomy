@@ -77,7 +77,7 @@ pub struct TextRenderer {
   glyph_cache: HashMap<(char, u32), f32>,
   width: u32,
   height: u32,
-  pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>)>,
+  pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>, Option<f32>)>,
   current_scissor: Option<(u32, u32, u32, u32)>,
   screen_size: Vec2,
   pub scale_factor: f32,
@@ -418,6 +418,33 @@ impl TextRenderer {
         self.current_scissor,
         align,
         font_name.map(|s| s.to_string()),
+        None,
+    ));
+  }
+
+  /// Queues text for rendering with a max width bound.
+  /// Glyphs beyond the bound are not rendered.
+  pub fn draw_bounded(
+    &mut self,
+    _device: &wgpu::Device,
+    _queue: &wgpu::Queue,
+    text: &str,
+    pos: Vec2,
+    size: f32,
+    color: Vec4,
+    align: HorizontalAlign,
+    font_name: Option<&str>,
+    max_width: f32,
+  ) {
+    self.pending.push((
+        text.to_string(),
+        pos,
+        size,
+        color,
+        self.current_scissor,
+        align,
+        font_name.map(|s| s.to_string()),
+        Some(max_width),
     ));
   }
 
@@ -449,7 +476,7 @@ impl TextRenderer {
       // Queue ALL sections in one call so glyph_brush
       // produces a single vertex buffer with all glyphs.
       let all_sections: Vec<Section> = self.pending.iter()
-        .map(|(text, pos, size, color, _scissor, align, font_name)| {
+        .map(|(text, pos, size, color, _scissor, align, font_name, bounds_w)| {
           let font_id = font_name.as_deref()
             .and_then(|name| self.fonts.get(name))
             .copied()
@@ -457,7 +484,7 @@ impl TextRenderer {
           let scaled_x = pos.x * scale;
           let scaled_y = pos.y * scale;
           let scaled_size = size * scale;
-          Section::default()
+          let mut section = Section::default()
             .add_text(
               Text::new(text.as_str())
                 .with_scale(scaled_size)
@@ -468,7 +495,11 @@ impl TextRenderer {
             .with_layout(
               wgpu_text::glyph_brush::Layout::default()
                 .h_align(*align)
-            )
+            );
+          if let Some(w) = bounds_w {
+            section = section.with_bounds((w * scale, f32::INFINITY));
+          }
+          section
         }).collect();
 
       self.brush.queue(device, queue, all_sections).unwrap();
@@ -637,5 +668,5 @@ impl TextRenderer {
 
 #[derive(Clone, Debug)]
 pub struct TextSnapshot {
-    pub pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>)>,
+    pub pending: Vec<(String, Vec2, f32, Vec4, Option<(u32, u32, u32, u32)>, HorizontalAlign, Option<String>, Option<f32>)>,
 }

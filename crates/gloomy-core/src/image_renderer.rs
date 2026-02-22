@@ -182,12 +182,13 @@ impl ImageRenderer {
         old
     }
 
-    pub fn resize(&self, queue: &wgpu::Queue, width: u32, height: u32) {
+    pub fn resize(&mut self, queue: &wgpu::Queue, width: u32, height: u32) {
+        self.screen_size = Vec2::new(width as f32, height as f32);
         queue.write_buffer(
             &self.globals_buffer,
             0,
             bytemuck::cast_slice(&[GlobalUniforms {
-                screen_size: Vec2::new(width as f32, height as f32),
+                screen_size: self.screen_size,
             }]),
         );
     }
