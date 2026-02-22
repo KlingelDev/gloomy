@@ -2725,6 +2725,39 @@ mod tests {
     }
   }
 
+  // ── Chart variant removal ─────────────────────────────
+
+  #[test]
+  fn test_chart_variant_removed_from_serde() {
+    // Widget::Chart was removed; its JSON must fail to deserialize.
+    let result =
+      serde_json::from_str::<Widget>(r#"{"Chart": {}}"#);
+    assert!(
+      result.is_err(),
+      "deserializing Chart JSON should fail after removal"
+    );
+  }
+
+  #[test]
+  fn test_icon_widget_type_name_after_chart_removal() {
+    // Icon was the last match arm before Chart was removed.
+    // Verify widget_type_name still returns "Icon" correctly.
+    let icon = Widget::Icon {
+      id: "icon1".to_string(),
+      icon_name: "star".to_string(),
+      size: 24.0,
+      color: None,
+      bounds: WidgetBounds::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    assert_eq!(widget_type_name(&icon), "Icon");
+    assert_eq!(widget_id(&icon), Some("icon1"));
+  }
+
   // ── Scrollbar theming ─────────────────────────────────
 
   #[test]

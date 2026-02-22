@@ -752,6 +752,24 @@ mod tests {
     assert_eq!(info.children[2].id.as_deref(), Some("list1"));
   }
 
+  // Icon is the last match arm in widget_type_name after Chart removal.
+  #[test]
+  fn icon_type_name_after_chart_removal() {
+    let icon = Widget::Icon {
+      id: "i1".to_string(),
+      icon_name: "check".to_string(),
+      size: 16.0,
+      color: None,
+      bounds: WidgetBounds::default(),
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    };
+    assert_eq!(widget_type_name(&icon), "Icon");
+  }
+
   // cell_size=0 is clamped to 1 internally; must not panic.
   #[test]
   fn cell_size_zero_does_not_panic() {
