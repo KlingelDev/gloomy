@@ -449,25 +449,36 @@ pub fn compute_layout(
         ..
     } => {
         // Simple layout: Header takes space, content takes the rest.
+        let content_pad = 6.0;
         let (header_size, content_rect) = match orientation {
             Orientation::Horizontal => {
-                 let header_h = 32.0; // Fixed header height for now
-                 (header_h, 
+                 let header_h = 32.0;
+                 (header_h,
                   crate::widget::WidgetBounds {
-                      x: bounds.x,
-                      y: bounds.y + header_h,
-                      width: bounds.width,
-                      height: (bounds.height - header_h).max(0.0),
+                      x: bounds.x + content_pad,
+                      y: bounds.y + header_h + content_pad,
+                      width: (bounds.width
+                        - content_pad * 2.0)
+                        .max(0.0),
+                      height: (bounds.height
+                        - header_h
+                        - content_pad * 2.0)
+                        .max(0.0),
                   })
             }
             Orientation::Vertical => {
-                 let header_w = 120.0; // Fixed header width for now
+                 let header_w = 120.0;
                  (header_w,
                   crate::widget::WidgetBounds {
-                      x: bounds.x + header_w,
-                      y: bounds.y,
-                      width: (bounds.width - header_w).max(0.0),
-                      height: bounds.height,
+                      x: bounds.x + header_w + content_pad,
+                      y: bounds.y + content_pad,
+                      width: (bounds.width
+                        - header_w
+                        - content_pad * 2.0)
+                        .max(0.0),
+                      height: (bounds.height
+                        - content_pad * 2.0)
+                        .max(0.0),
                   })
             }
         };
@@ -695,9 +706,16 @@ fn get_fixed_size(widget: &Widget) -> (f32, f32) {
         let h = if let Some(h) = height { *h } else { 20.0 };
         (w, h.max(style.corner_radius * 2.0))
     },
-    Widget::RadioButton { style, .. } => {
-        let s = if style.size > 0.0 { style.size } else { 20.0 };
-        (s, s)
+    Widget::RadioButton { style, label, .. } => {
+        let s =
+          if style.size > 0.0 { style.size } else { 20.0 };
+        let label_w = if label.is_empty() {
+          0.0
+        } else {
+          // Approximate: 8px per char at 14px font + gap.
+          6.0 + label.len() as f32 * 8.0
+        };
+        (s + label_w, s.max(20.0))
     },
     Widget::Dropdown { width, height, .. } => {
         let w = if let Some(w) = width { *w } else { 150.0 };

@@ -17,6 +17,7 @@ use gloomy_core::{
 };
 use glam::Vec2;
 use image::RgbaImage;
+use serde::Serialize;
 use std::path::Path;
 
 // Re-export for convenience.
@@ -151,6 +152,14 @@ impl GloomyDriver {
     find_recursive(&self.root, id)
   }
 
+  /// Finds a widget by its ID, returning a mutable reference.
+  pub fn find_mut(
+    &mut self,
+    id: &str,
+  ) -> Option<&mut Widget> {
+    find_mut_recursive(&mut self.root, id)
+  }
+
   /// Finds a widget's bounds by ID.
   pub fn find_bounds(
     &self,
@@ -200,6 +209,273 @@ impl GloomyDriver {
       self.width,
       self.height,
     );
+  }
+
+  // ── Input simulation ─────────────────────────────────
+
+  /// Sets the text value on a `TextInput` or `Autocomplete`.
+  pub fn set_text(
+    &mut self,
+    id: &str,
+    text: &str,
+  ) -> anyhow::Result<()> {
+    let w = self.find_mut(id).ok_or_else(|| {
+      anyhow::anyhow!("Widget '{}' not found", id)
+    })?;
+    match w {
+      Widget::TextInput { value, .. } => {
+        *value = text.to_string();
+      }
+      Widget::Autocomplete { value, .. } => {
+        *value = text.to_string();
+      }
+      _ => {
+        anyhow::bail!(
+          "Widget '{}' is not a TextInput or Autocomplete",
+          id,
+        );
+      }
+    }
+    self.relayout();
+    Ok(())
+  }
+
+  /// Sets the numeric value on a `NumberInput`, respecting
+  /// `min`/`max` bounds.
+  pub fn set_number(
+    &mut self,
+    id: &str,
+    number: f64,
+  ) -> anyhow::Result<()> {
+    let w = self.find_mut(id).ok_or_else(|| {
+      anyhow::anyhow!("Widget '{}' not found", id)
+    })?;
+    match w {
+      Widget::NumberInput {
+        value, min, max, ..
+      } => {
+        let mut v = number;
+        if let Some(lo) = min {
+          v = v.max(*lo);
+        }
+        if let Some(hi) = max {
+          v = v.min(*hi);
+        }
+        *value = v;
+      }
+      _ => {
+        anyhow::bail!(
+          "Widget '{}' is not a NumberInput", id,
+        );
+      }
+    }
+    self.relayout();
+    Ok(())
+  }
+
+  /// Sets the value on a `Slider`, clamping to `min`/`max`.
+  pub fn set_slider(
+    &mut self,
+    id: &str,
+    number: f32,
+  ) -> anyhow::Result<()> {
+    let w = self.find_mut(id).ok_or_else(|| {
+      anyhow::anyhow!("Widget '{}' not found", id)
+    })?;
+    match w {
+      Widget::Slider {
+        value, min, max, ..
+      } => {
+        *value = number.clamp(*min, *max);
+      }
+      _ => {
+        anyhow::bail!(
+          "Widget '{}' is not a Slider", id,
+        );
+      }
+    }
+    self.relayout();
+    Ok(())
+  }
+
+  /// Toggles a `Checkbox` or `ToggleSwitch`, returning the
+  /// new checked state.
+  pub fn toggle(
+    &mut self,
+    id: &str,
+  ) -> anyhow::Result<bool> {
+    let w = self.find_mut(id).ok_or_else(|| {
+      anyhow::anyhow!("Widget '{}' not found", id)
+    })?;
+    let new_state = match w {
+      Widget::Checkbox { checked, .. } => {
+        *checked = !*checked;
+        *checked
+      }
+      Widget::ToggleSwitch { checked, .. } => {
+        *checked = !*checked;
+        *checked
+      }
+      _ => {
+        anyhow::bail!(
+          "Widget '{}' is not a Checkbox or ToggleSwitch",
+          id,
+        );
+      }
+    };
+    self.relayout();
+    Ok(new_state)
+  }
+
+  /// Sets `selected_index` on a `Dropdown` or `ListView`.
+  pub fn select(
+    &mut self,
+    id: &str,
+    index: usize,
+  ) -> anyhow::Result<()> {
+    let w = self.find_mut(id).ok_or_else(|| {
+      anyhow::anyhow!("Widget '{}' not found", id)
+    })?;
+    match w {
+      Widget::Dropdown {
+        selected_index,
+        options,
+        ..
+      } => {
+        if index >= options.len() {
+          anyhow::bail!(
+            "Index {} out of bounds for Dropdown '{}' \
+             ({} options)",
+            index,
+            id,
+            options.len(),
+          );
+        }
+        *selected_index = Some(index);
+      }
+      Widget::ListView {
+        selected_index,
+        items,
+        ..
+      } => {
+        if index >= items.len() {
+          anyhow::bail!(
+            "Index {} out of bounds for ListView '{}' \
+             ({} items)",
+            index,
+            id,
+            items.len(),
+          );
+        }
+        *selected_index = Some(index);
+      }
+      _ => {
+        anyhow::bail!(
+          "Widget '{}' is not a Dropdown or ListView",
+          id,
+        );
+      }
+    }
+    self.relayout();
+    Ok(())
+  }
+
+  /// Sets the selected tab index on a `Tab` widget.
+  pub fn select_tab(
+    &mut self,
+    id: &str,
+    index: usize,
+  ) -> anyhow::Result<()> {
+    let w = self.find_mut(id).ok_or_else(|| {
+      anyhow::anyhow!("Widget '{}' not found", id)
+    })?;
+    match w {
+      Widget::Tab {
+        selected, tabs, ..
+      } => {
+        if index >= tabs.len() {
+          anyhow::bail!(
+            "Index {} out of bounds for Tab '{}' \
+             ({} tabs)",
+            index,
+            id,
+            tabs.len(),
+          );
+        }
+        *selected = index;
+      }
+      _ => {
+        anyhow::bail!(
+          "Widget '{}' is not a Tab", id,
+        );
+      }
+    }
+    self.relayout();
+    Ok(())
+  }
+
+  // ── State querying ───────────────────────────────────
+
+  /// Returns the text value of a `TextInput`,
+  /// `Autocomplete`, `Label`, or `Button`.
+  pub fn get_text(&self, id: &str) -> Option<String> {
+    let w = self.find(id)?;
+    match w {
+      Widget::TextInput { value, .. } => {
+        Some(value.clone())
+      }
+      Widget::Autocomplete { value, .. } => {
+        Some(value.clone())
+      }
+      Widget::Label { text, .. } => Some(text.clone()),
+      Widget::Button { text, .. } => Some(text.clone()),
+      _ => None,
+    }
+  }
+
+  /// Returns the numeric value of a `NumberInput` or
+  /// `Slider`.
+  pub fn get_number(&self, id: &str) -> Option<f64> {
+    let w = self.find(id)?;
+    match w {
+      Widget::NumberInput { value, .. } => Some(*value),
+      Widget::Slider { value, .. } => {
+        Some(*value as f64)
+      }
+      _ => None,
+    }
+  }
+
+  /// Returns the checked state of a `Checkbox` or
+  /// `ToggleSwitch`.
+  pub fn is_checked(&self, id: &str) -> Option<bool> {
+    let w = self.find(id)?;
+    match w {
+      Widget::Checkbox { checked, .. } => Some(*checked),
+      Widget::ToggleSwitch { checked, .. } => {
+        Some(*checked)
+      }
+      _ => None,
+    }
+  }
+
+  /// Returns the selected index of a `Dropdown`,
+  /// `ListView`, or `Tab`.
+  pub fn get_selected(
+    &self,
+    id: &str,
+  ) -> Option<usize> {
+    let w = self.find(id)?;
+    match w {
+      Widget::Dropdown {
+        selected_index, ..
+      } => *selected_index,
+      Widget::ListView {
+        selected_index, ..
+      } => *selected_index,
+      Widget::Tab { selected, .. } => Some(*selected),
+      _ => None,
+    }
   }
 }
 
@@ -261,7 +537,7 @@ fn dump_layout_recursive(
 // ── Text extraction ───────────────────────────────────────
 
 /// A text entry extracted from the widget tree.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TextEntry {
   /// The visible text content.
   pub text: String,
@@ -757,6 +1033,37 @@ fn find_recursive<'a>(
     if let Some(found) = find_recursive(child, target_id) {
       return Some(found);
     }
+  }
+  None
+}
+
+fn find_mut_recursive<'a>(
+  widget: &'a mut Widget,
+  target_id: &str,
+) -> Option<&'a mut Widget> {
+  if widget_id(widget) == Some(target_id) {
+    return Some(widget);
+  }
+  match widget {
+    Widget::Container { children, .. } => {
+      for child in children.iter_mut() {
+        if let Some(found) =
+          find_mut_recursive(child, target_id)
+        {
+          return Some(found);
+        }
+      }
+    }
+    Widget::Tab { tabs, .. } => {
+      for tab in tabs.iter_mut() {
+        if let Some(found) =
+          find_mut_recursive(&mut tab.content, target_id)
+        {
+          return Some(found);
+        }
+      }
+    }
+    _ => {}
   }
   None
 }
@@ -2790,5 +3097,592 @@ mod tests {
     } else {
       panic!("Expected Scrollbar");
     }
+  }
+
+  // ── find_mut ────────────────────────────────────────
+
+  #[test]
+  fn test_find_mut_found() {
+    let root = make_container_with(
+      Some("root"),
+      vec![make_checkbox("cb1", false)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    assert!(driver.find_mut("cb1").is_some());
+  }
+
+  #[test]
+  fn test_find_mut_not_found() {
+    let root = make_container_with(Some("root"), vec![]);
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    assert!(driver.find_mut("nope").is_none());
+  }
+
+  #[test]
+  fn test_find_mut_nested() {
+    let inner = make_container_with(
+      Some("inner"),
+      vec![make_text_input("ti1", "", "")],
+    );
+    let root =
+      make_container_with(Some("outer"), vec![inner]);
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let w = driver.find_mut("ti1");
+    assert!(w.is_some());
+    if let Some(Widget::TextInput { value, .. }) = w {
+      *value = "mutated".to_string();
+    }
+    assert_eq!(
+      driver.get_text("ti1"),
+      Some("mutated".to_string()),
+    );
+  }
+
+  // ── set_text ────────────────────────────────────────
+
+  #[test]
+  fn test_set_text_text_input() {
+    let root = make_container_with(
+      None,
+      vec![make_text_input("ti", "", "hint")],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_text("ti", "hello").unwrap();
+    assert_eq!(
+      driver.get_text("ti"),
+      Some("hello".to_string()),
+    );
+  }
+
+  #[test]
+  fn test_set_text_autocomplete() {
+    let root = make_container_with(
+      None,
+      vec![Widget::Autocomplete {
+        id: "ac1".to_string(),
+        value: "".to_string(),
+        placeholder: "Search".to_string(),
+        suggestions: vec![],
+        max_visible: 5,
+        bounds: WidgetBounds::default(),
+        style: Default::default(),
+        validation: None,
+        width: 200.0,
+        height: 32.0,
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_text("ac1", "Paris").unwrap();
+    assert_eq!(
+      driver.get_text("ac1"),
+      Some("Paris".to_string()),
+    );
+  }
+
+  #[test]
+  fn test_set_text_wrong_type() {
+    let root = make_container_with(
+      None,
+      vec![make_checkbox("cb", false)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let result = driver.set_text("cb", "text");
+    assert!(result.is_err());
+    assert!(result
+      .unwrap_err()
+      .to_string()
+      .contains("not a TextInput"));
+  }
+
+  // ── set_number ──────────────────────────────────────
+
+  fn make_number_input(
+    id: &str,
+    value: f64,
+    min: Option<f64>,
+    max: Option<f64>,
+  ) -> Widget {
+    Widget::NumberInput {
+      id: id.to_string(),
+      value,
+      min,
+      max,
+      step: 1.0,
+      precision: 0,
+      show_spinner: true,
+      bounds: WidgetBounds::default(),
+      validation: None,
+      style: Default::default(),
+      width: 100.0,
+      height: 32.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    }
+  }
+
+  #[test]
+  fn test_set_number_valid() {
+    let root = make_container_with(
+      None,
+      vec![make_number_input("n1", 0.0, None, None)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_number("n1", 42.0).unwrap();
+    assert_eq!(driver.get_number("n1"), Some(42.0));
+  }
+
+  #[test]
+  fn test_set_number_clamped_to_min() {
+    let root = make_container_with(
+      None,
+      vec![make_number_input(
+        "n1",
+        50.0,
+        Some(10.0),
+        Some(100.0),
+      )],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_number("n1", 5.0).unwrap();
+    assert_eq!(driver.get_number("n1"), Some(10.0));
+  }
+
+  #[test]
+  fn test_set_number_clamped_to_max() {
+    let root = make_container_with(
+      None,
+      vec![make_number_input(
+        "n1",
+        50.0,
+        Some(10.0),
+        Some(100.0),
+      )],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_number("n1", 200.0).unwrap();
+    assert_eq!(driver.get_number("n1"), Some(100.0));
+  }
+
+  #[test]
+  fn test_set_number_wrong_type() {
+    let root = make_container_with(
+      None,
+      vec![make_checkbox("cb", false)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let result = driver.set_number("cb", 1.0);
+    assert!(result.is_err());
+    assert!(result
+      .unwrap_err()
+      .to_string()
+      .contains("not a NumberInput"));
+  }
+
+  // ── set_slider ──────────────────────────────────────
+
+  fn make_slider(
+    id: &str,
+    value: f32,
+    min: f32,
+    max: f32,
+  ) -> Widget {
+    Widget::Slider {
+      id: id.to_string(),
+      value,
+      min,
+      max,
+      style: SliderStyle::default(),
+      bounds: WidgetBounds::default(),
+      width: 200.0,
+      flex: 0.0,
+      grid_col: None,
+      grid_row: None,
+      col_span: 1,
+      row_span: 1,
+    }
+  }
+
+  #[test]
+  fn test_set_slider_valid() {
+    let root = make_container_with(
+      None,
+      vec![make_slider("sl", 0.0, 0.0, 1.0)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_slider("sl", 0.75).unwrap();
+    assert_eq!(driver.get_number("sl"), Some(0.75));
+  }
+
+  #[test]
+  fn test_set_slider_clamped() {
+    let root = make_container_with(
+      None,
+      vec![make_slider("sl", 0.5, 0.0, 1.0)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.set_slider("sl", 5.0).unwrap();
+    assert_eq!(driver.get_number("sl"), Some(1.0));
+    driver.set_slider("sl", -1.0).unwrap();
+    assert_eq!(driver.get_number("sl"), Some(0.0));
+  }
+
+  #[test]
+  fn test_set_slider_wrong_type() {
+    let root = make_container_with(
+      None,
+      vec![make_checkbox("cb", false)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let result = driver.set_slider("cb", 0.5);
+    assert!(result.is_err());
+    assert!(result
+      .unwrap_err()
+      .to_string()
+      .contains("not a Slider"));
+  }
+
+  // ── toggle ──────────────────────────────────────────
+
+  #[test]
+  fn test_toggle_checkbox() {
+    let root = make_container_with(
+      None,
+      vec![make_checkbox("cb", false)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.is_checked("cb"), Some(false));
+    let state = driver.toggle("cb").unwrap();
+    assert!(state);
+    assert_eq!(driver.is_checked("cb"), Some(true));
+    let state = driver.toggle("cb").unwrap();
+    assert!(!state);
+    assert_eq!(driver.is_checked("cb"), Some(false));
+  }
+
+  #[test]
+  fn test_toggle_toggle_switch() {
+    let root = make_container_with(
+      None,
+      vec![Widget::ToggleSwitch {
+        id: "ts1".to_string(),
+        checked: false,
+        style: Default::default(),
+        bounds: WidgetBounds::default(),
+        layout: Default::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let state = driver.toggle("ts1").unwrap();
+    assert!(state);
+    assert_eq!(driver.is_checked("ts1"), Some(true));
+  }
+
+  #[test]
+  fn test_toggle_wrong_type() {
+    let root = make_container_with(
+      None,
+      vec![make_text_input("ti", "", "")],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let result = driver.toggle("ti");
+    assert!(result.is_err());
+    assert!(result
+      .unwrap_err()
+      .to_string()
+      .contains("not a Checkbox"));
+  }
+
+  // ── select ──────────────────────────────────────────
+
+  #[test]
+  fn test_select_dropdown() {
+    let root = make_container_with(
+      None,
+      vec![make_dropdown(
+        "dd",
+        vec!["A", "B", "C"],
+        None,
+      )],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_selected("dd"), None);
+    driver.select("dd", 1).unwrap();
+    assert_eq!(driver.get_selected("dd"), Some(1));
+  }
+
+  #[test]
+  fn test_select_listview() {
+    let root = make_container_with(
+      None,
+      vec![Widget::ListView {
+        id: "lv".to_string(),
+        items: vec![
+          "X".to_string(),
+          "Y".to_string(),
+        ],
+        selected_index: None,
+        style: Default::default(),
+        bounds: WidgetBounds::default(),
+        width: Some(200.0),
+        height: Some(100.0),
+        layout: Default::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+        scroll_offset: 0.0,
+      }],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    driver.select("lv", 0).unwrap();
+    assert_eq!(driver.get_selected("lv"), Some(0));
+  }
+
+  #[test]
+  fn test_select_out_of_bounds() {
+    let root = make_container_with(
+      None,
+      vec![make_dropdown(
+        "dd",
+        vec!["A", "B"],
+        None,
+      )],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let result = driver.select("dd", 5);
+    assert!(result.is_err());
+    assert!(result
+      .unwrap_err()
+      .to_string()
+      .contains("out of bounds"));
+  }
+
+  // ── select_tab ──────────────────────────────────────
+
+  fn make_tab(id: &str, n: usize) -> Widget {
+    use gloomy_core::widget::{TabItem, TabStyle};
+    let tabs: Vec<TabItem> = (0..n)
+      .map(|i| TabItem {
+        title: format!("Tab {}", i),
+        content: Box::new(Widget::label(&format!(
+          "Content {}",
+          i
+        ))),
+      })
+      .collect();
+    Widget::tab(
+      id,
+      tabs,
+      Orientation::Horizontal,
+      TabStyle::default(),
+    )
+  }
+
+  #[test]
+  fn test_select_tab_valid() {
+    let root = make_container_with(
+      None,
+      vec![make_tab("tabs", 3)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_selected("tabs"), Some(0));
+    driver.select_tab("tabs", 2).unwrap();
+    assert_eq!(driver.get_selected("tabs"), Some(2));
+  }
+
+  #[test]
+  fn test_select_tab_out_of_bounds() {
+    let root = make_container_with(
+      None,
+      vec![make_tab("tabs", 2)],
+    );
+    let mut driver =
+      GloomyDriver::new(root, 800.0, 600.0);
+    let result = driver.select_tab("tabs", 5);
+    assert!(result.is_err());
+    assert!(result
+      .unwrap_err()
+      .to_string()
+      .contains("out of bounds"));
+  }
+
+  // ── get_text ────────────────────────────────────────
+
+  #[test]
+  fn test_get_text_text_input() {
+    let root = make_container_with(
+      None,
+      vec![make_text_input("ti", "hello", "")],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(
+      driver.get_text("ti"),
+      Some("hello".to_string()),
+    );
+  }
+
+  #[test]
+  fn test_get_text_label_not_found() {
+    let root = make_container_with(
+      None,
+      vec![Widget::label("test")],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    // Labels have no id, so find returns None.
+    assert_eq!(driver.get_text("missing"), None);
+  }
+
+  // ── get_number ──────────────────────────────────────
+
+  #[test]
+  fn test_get_number_number_input() {
+    let root = make_container_with(
+      None,
+      vec![make_number_input("n1", 42.5, None, None)],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_number("n1"), Some(42.5));
+  }
+
+  #[test]
+  fn test_get_number_slider() {
+    let root = make_container_with(
+      None,
+      vec![make_slider("sl", 0.5, 0.0, 1.0)],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_number("sl"), Some(0.5));
+  }
+
+  #[test]
+  fn test_get_number_not_found() {
+    let root = make_container_with(None, vec![]);
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_number("nope"), None);
+  }
+
+  // ── is_checked ──────────────────────────────────────
+
+  #[test]
+  fn test_is_checked_checkbox() {
+    let root = make_container_with(
+      None,
+      vec![make_checkbox("cb", true)],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.is_checked("cb"), Some(true));
+  }
+
+  #[test]
+  fn test_is_checked_toggle_switch() {
+    let root = make_container_with(
+      None,
+      vec![Widget::ToggleSwitch {
+        id: "ts".to_string(),
+        checked: true,
+        style: Default::default(),
+        bounds: WidgetBounds::default(),
+        layout: Default::default(),
+        flex: 0.0,
+        grid_col: None,
+        grid_row: None,
+        col_span: 1,
+        row_span: 1,
+      }],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.is_checked("ts"), Some(true));
+  }
+
+  #[test]
+  fn test_is_checked_not_found() {
+    let root = make_container_with(None, vec![]);
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.is_checked("nope"), None);
+  }
+
+  // ── get_selected ────────────────────────────────────
+
+  #[test]
+  fn test_get_selected_dropdown() {
+    let root = make_container_with(
+      None,
+      vec![make_dropdown(
+        "dd",
+        vec!["A", "B"],
+        Some(1),
+      )],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_selected("dd"), Some(1));
+  }
+
+  #[test]
+  fn test_get_selected_tab() {
+    let root = make_container_with(
+      None,
+      vec![make_tab("tabs", 3)],
+    );
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_selected("tabs"), Some(0));
+  }
+
+  #[test]
+  fn test_get_selected_not_found() {
+    let root = make_container_with(None, vec![]);
+    let driver = GloomyDriver::new(root, 800.0, 600.0);
+    assert_eq!(driver.get_selected("nope"), None);
+  }
+
+  // ── TextEntry serialization ─────────────────────────
+
+  #[test]
+  fn test_text_entry_serialize() {
+    let entry = TextEntry {
+      text: "Hello".to_string(),
+      x: 10.0,
+      y: 20.0,
+      width: 100.0,
+      height: 30.0,
+      widget_id: Some("lbl1".to_string()),
+      widget_type: "Label".to_string(),
+    };
+    let json = serde_json::to_string(&entry).unwrap();
+    assert!(json.contains("\"text\":\"Hello\""));
+    assert!(json.contains("\"widget_id\":\"lbl1\""));
   }
 }

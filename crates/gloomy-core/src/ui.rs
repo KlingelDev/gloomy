@@ -2,6 +2,7 @@
 
 use crate::interaction::HitTestResult;
 use crate::interaction::InteractionState;
+use crate::layout_engine::compute_layout;
 use crate::primitives::PrimitiveRenderer;
 use crate::text::TextRenderer;
 use crate::widget::{Widget, TextAlign, WidgetBounds};
@@ -339,21 +340,71 @@ fn map_text_align(align: TextAlign) -> HorizontalAlign {
 /// Renders a widget tree recursively.
 pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
   match widget {
-    Widget::ToggleSwitch { id, checked, style, bounds, .. } => {
-        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-        let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-        let track_h = if style.track_height > 0.0 { style.track_height } else { 20.0 };
-        let thumb_r = if style.thumb_radius > 0.0 { style.thumb_radius } else { 8.0 };
-        let track_col = if *checked { style.track_color_on.unwrap_or((0.2, 0.8, 0.4, 1.0)) } else { style.track_color_off.unwrap_or((0.2, 0.2, 0.25, 1.0)) };
-        let thumb_col = style.thumb_color.unwrap_or((0.9, 0.9, 0.95, 1.0));
-        ctx.primitives.draw_rect(center, Vec2::new(bounds.width * 0.5, track_h * 0.5), Vec4::new(track_col.0, track_col.1, track_col.2, track_col.3), [track_h * 0.5; 4], 0.0);
+    Widget::ToggleSwitch {
+      checked, style, bounds, ..
+    } => {
+        let track_h = if style.track_height > 0.0 {
+          style.track_height
+        } else {
+          20.0
+        };
+        let thumb_r = if style.thumb_radius > 0.0 {
+          style.thumb_radius
+        } else {
+          8.0
+        };
+        // Use intrinsic width so the toggle doesn't stretch
+        // to fill the container.
+        let toggle_w = if style.width > 0.0 {
+          style.width
+        } else {
+          40.0
+        };
+        let pos =
+          ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let center = pos
+          + Vec2::new(toggle_w * 0.5, bounds.height * 0.5);
+        let track_col = if *checked {
+          style
+            .track_color_on
+            .unwrap_or((0.2, 0.8, 0.4, 1.0))
+        } else {
+          style
+            .track_color_off
+            .unwrap_or((0.2, 0.2, 0.25, 1.0))
+        };
+        let thumb_col = style
+          .thumb_color
+          .unwrap_or((0.9, 0.9, 0.95, 1.0));
+        ctx.primitives.draw_rect(
+          center,
+          Vec2::new(toggle_w * 0.5, track_h * 0.5),
+          Vec4::new(
+            track_col.0, track_col.1,
+            track_col.2, track_col.3,
+          ),
+          [track_h * 0.5; 4],
+          0.0,
+        );
         let pad = 2.0;
-        let travel = bounds.width - (thumb_r * 2.0) - (pad * 2.0);
-        let offset_x = if *checked { travel } else { 0.0 };
-        let thumb_x = pad + thumb_r + offset_x - (bounds.width * 0.5); // Relative to center?
-        // Primitive renderer draw_circle takes center pos.
-        let thumb_pos = pos + Vec2::new(pad + thumb_r + offset_x, bounds.height * 0.5); 
-        ctx.primitives.draw_circle(thumb_pos, thumb_r, Vec4::new(thumb_col.0, thumb_col.1, thumb_col.2, thumb_col.3), 0.0);
+        let travel =
+          toggle_w - (thumb_r * 2.0) - (pad * 2.0);
+        let offset_x =
+          if *checked { travel } else { 0.0 };
+        let thumb_pos = pos
+          + Vec2::new(
+            pad + thumb_r + offset_x,
+            bounds.height * 0.5,
+          );
+        ctx.primitives.draw_circle(
+          thumb_pos,
+          thumb_r,
+          Vec4::new(
+            thumb_col.0, thumb_col.1,
+            thumb_col.2, thumb_col.3,
+          ),
+          0.0,
+        );
     }
     Widget::ProgressBar { value, min, max, style, bounds, .. } => {
         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
@@ -370,18 +421,62 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
             ctx.primitives.draw_rect(fill_center, Vec2::new(fill_w * 0.5, bounds.height * 0.5), Vec4::new(fill_col.0, fill_col.1, fill_col.2, fill_col.3), [cr; 4], 0.0);
         }
     }
-    Widget::RadioButton { selected, style, bounds, .. } => {
-         let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-         let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
-         let size = if style.size > 0.0 { style.size } else { 20.0 };
+    Widget::RadioButton {
+      selected, style, bounds, label, ..
+    } => {
+         let pos =
+           ctx.offset + Vec2::new(bounds.x, bounds.y);
+         let size = if style.size > 0.0 {
+           style.size
+         } else {
+           20.0
+         };
          let radius = size * 0.5;
-         let outer_col = style.outer_color.unwrap_or((0.5, 0.5, 0.5, 1.0));
-         ctx.primitives.draw_circle(center, radius, Vec4::new(outer_col.0, outer_col.1, outer_col.2, outer_col.3), 0.0);
+         let center = Vec2::new(
+           pos.x + radius,
+           pos.y + bounds.height * 0.5,
+         );
+         let outer_col = style
+           .outer_color
+           .unwrap_or((0.5, 0.5, 0.5, 1.0));
+         ctx.primitives.draw_circle(
+           center,
+           radius,
+           Vec4::from(outer_col),
+           0.0,
+         );
          let inner_bg = (0.1, 0.1, 0.12, 1.0);
-         ctx.primitives.draw_circle(center, radius - 2.0, Vec4::new(inner_bg.0, inner_bg.1, inner_bg.2, inner_bg.3), 0.0);
+         ctx.primitives.draw_circle(
+           center,
+           radius - 2.0,
+           Vec4::from(inner_bg),
+           0.0,
+         );
          if *selected {
-             let inner_col = style.inner_color.unwrap_or((0.2, 0.8, 0.4, 1.0));
-             ctx.primitives.draw_circle(center, radius - 6.0, Vec4::new(inner_col.0, inner_col.1, inner_col.2, inner_col.3), 0.0);
+           let inner_col = style
+             .inner_color
+             .unwrap_or((0.2, 0.8, 0.4, 1.0));
+           ctx.primitives.draw_circle(
+             center,
+             radius - 6.0,
+             Vec4::from(inner_col),
+             0.0,
+           );
+         }
+         if !label.is_empty() {
+           let text_x = pos.x + size + 6.0;
+           let text_y =
+             pos.y + (bounds.height - 14.0) * 0.5;
+           ctx.text.draw(
+             ctx.device,
+             ctx.queue,
+             label,
+             Vec2::new(text_x, text_y),
+             14.0,
+             Vec4::new(0.9, 0.9, 0.9, 1.0),
+             HorizontalAlign::Left,
+             None,
+           );
          }
     }
     Widget::Dropdown { id, options, expanded, style, bounds, selected_index, width, height, .. } => {
@@ -1762,16 +1857,64 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
         }
     }
 
-    Widget::Checkbox { checked, style, bounds, size, .. } => {
-        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-        let center = pos + Vec2::new(bounds.width * 0.5, bounds.height * 0.5);
+    Widget::Checkbox {
+      checked, style, bounds, size, ..
+    } => {
+        let pos =
+          ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let center = pos
+          + Vec2::new(
+            bounds.width * 0.5,
+            bounds.height * 0.5,
+          );
         let hs = *size * 0.5;
-        
-        ctx.primitives.draw_rect(center, Vec2::new(hs, hs), Vec4::new(style.background.0, style.background.1, style.background.2, style.background.3), [4.0; 4], 0.0);
-        
+        let bg = if *checked {
+          style.background_checked
+        } else {
+          style.background
+        };
+        ctx.primitives.draw_rect(
+          center,
+          Vec2::new(hs, hs),
+          Vec4::new(bg.0, bg.1, bg.2, bg.3),
+          [style.corner_radius; 4],
+          0.0,
+        );
+        if let Some(ref border) = style.border {
+          ctx.primitives.draw_rect(
+            center,
+            Vec2::new(hs, hs),
+            Vec4::new(
+              border.color.0, border.color.1,
+              border.color.2, border.color.3,
+            ),
+            [style.corner_radius; 4],
+            border.width,
+          );
+        }
         if *checked {
-            let cs = *size * 0.3;
-            ctx.primitives.draw_rect(center, Vec2::new(cs, cs), Vec4::new(style.checkmark_color.0, style.checkmark_color.1, style.checkmark_color.2, style.checkmark_color.3), [1.0; 4], 0.0);
+          let col = Vec4::new(
+            style.checkmark_color.0,
+            style.checkmark_color.1,
+            style.checkmark_color.2,
+            style.checkmark_color.3,
+          );
+          let s = *size;
+          let font_size = s * 0.75;
+          let text_pos = Vec2::new(
+            center.x,
+            center.y - font_size * 0.5,
+          );
+          ctx.text.draw(
+            ctx.device,
+            ctx.queue,
+            "\u{2713}",
+            text_pos,
+            font_size,
+            col,
+            HorizontalAlign::Center,
+            None,
+          );
         }
     }
 
@@ -1940,64 +2083,172 @@ pub fn render_widget(widget: &Widget, ctx: &mut RenderContext) {
     }
 
     Widget::Tab {
-        id, tabs, selected, orientation, style, bounds, ..
+        tabs, selected, orientation, style, bounds, ..
     } => {
-        let pos = ctx.offset + Vec2::new(bounds.x, bounds.y);
-        let header_rect = match orientation {
-            crate::widget::Orientation::Horizontal => {
-                 crate::Rect { x: pos.x, y: pos.y, width: bounds.width, height: 32.0 }
-            }
-            crate::widget::Orientation::Vertical => {
-                 crate::Rect { x: pos.x, y: pos.y, width: 120.0, height: bounds.height }
-            }
-        };
+        let pos =
+          ctx.offset + Vec2::new(bounds.x, bounds.y);
+        let full_center = pos
+          + Vec2::new(
+            bounds.width * 0.5,
+            bounds.height * 0.5,
+          );
 
-        // Draw Tab Bar Background
+        // Draw full-widget border.
+        let border_col =
+          Vec4::from(style.unselected_color);
         ctx.primitives.draw_rect(
-             Vec2::new(header_rect.x + header_rect.width * 0.5, header_rect.y + header_rect.height * 0.5),
-             Vec2::new(header_rect.width * 0.5, header_rect.height * 0.5),
-             Vec4::from(style.background),
-             [0.0; 4],
-             0.0
+          full_center,
+          Vec2::new(
+            bounds.width * 0.5,
+            bounds.height * 0.5,
+          ),
+          border_col,
+          [2.0; 4],
+          1.0,
+        );
+        // Background behind content area.
+        let header_h = 32.0_f32;
+        let content_bg = Vec4::new(
+          style.background.0 * 0.5,
+          style.background.1 * 0.5,
+          style.background.2 * 0.5,
+          0.3,
+        );
+        let content_center = match orientation {
+          crate::widget::Orientation::Horizontal => {
+            Vec2::new(
+              pos.x + bounds.width * 0.5,
+              pos.y + header_h
+                + (bounds.height - header_h) * 0.5,
+            )
+          }
+          crate::widget::Orientation::Vertical => {
+            let header_w = 120.0_f32;
+            Vec2::new(
+              pos.x + header_w
+                + (bounds.width - header_w) * 0.5,
+              pos.y + bounds.height * 0.5,
+            )
+          }
+        };
+        let content_half = match orientation {
+          crate::widget::Orientation::Horizontal => {
+            Vec2::new(
+              bounds.width * 0.5,
+              (bounds.height - header_h) * 0.5,
+            )
+          }
+          crate::widget::Orientation::Vertical => {
+            let header_w = 120.0_f32;
+            Vec2::new(
+              (bounds.width - header_w) * 0.5,
+              bounds.height * 0.5,
+            )
+          }
+        };
+        ctx.primitives.draw_rect(
+          content_center,
+          content_half,
+          content_bg,
+          [0.0; 4],
+          0.0,
         );
 
-        // Draw Tabs
+        let header_rect = match orientation {
+          crate::widget::Orientation::Horizontal => {
+            crate::Rect {
+              x: pos.x,
+              y: pos.y,
+              width: bounds.width,
+              height: header_h,
+            }
+          }
+          crate::widget::Orientation::Vertical => {
+            crate::Rect {
+              x: pos.x,
+              y: pos.y,
+              width: 120.0,
+              height: bounds.height,
+            }
+          }
+        };
+
+        // Draw Tab Bar Background.
+        ctx.primitives.draw_rect(
+          Vec2::new(
+            header_rect.x + header_rect.width * 0.5,
+            header_rect.y + header_rect.height * 0.5,
+          ),
+          Vec2::new(
+            header_rect.width * 0.5,
+            header_rect.height * 0.5,
+          ),
+          Vec4::from(style.background),
+          [0.0; 4],
+          0.0,
+        );
+
+        // Draw individual tab headers.
         let tab_count = tabs.len();
         if tab_count > 0 {
-             let (tab_w, tab_h) = match orientation {
-                 crate::widget::Orientation::Horizontal => (header_rect.width / tab_count as f32, header_rect.height),
-                 crate::widget::Orientation::Vertical => (header_rect.width, 32.0), // Fixed height per tab in vertical
-             };
+          let (tab_w, tab_h) = match orientation {
+            crate::widget::Orientation::Horizontal => (
+              header_rect.width / tab_count as f32,
+              header_rect.height,
+            ),
+            crate::widget::Orientation::Vertical => {
+              (header_rect.width, 32.0)
+            }
+          };
 
-             for (i, tab) in tabs.iter().enumerate() {
-                 let (tx, ty) = match orientation {
-                     crate::widget::Orientation::Horizontal => (header_rect.x + i as f32 * tab_w, header_rect.y),
-                     crate::widget::Orientation::Vertical => (header_rect.x, header_rect.y + i as f32 * tab_h),
-                 };
-                 
-                 let color = if i == *selected { style.selected_color } else { style.unselected_color };
-                 
-                 // Draw Tab Rect
-                 ctx.primitives.draw_rect(
-                      Vec2::new(tx + tab_w * 0.5, ty + tab_h * 0.5),
-                      Vec2::new(tab_w * 0.5, tab_h * 0.5),
-                      Vec4::from(color),
-                      [0.0; 4],
-                      1.0 // Border logic can be enhanced
-                 );
-                 
-                 // Draw Title
-                 ctx.text.draw(
-                      ctx.device, ctx.queue, &tab.title,
-                      Vec2::new(tx + tab_w * 0.5, ty + tab_h * 0.5),
-                      14.0, Vec4::ONE, HorizontalAlign::Center, None
-                 );
-             }
+          for (i, tab) in tabs.iter().enumerate() {
+            let (tx, ty) = match orientation {
+              crate::widget::Orientation::Horizontal => (
+                header_rect.x + i as f32 * tab_w,
+                header_rect.y,
+              ),
+              crate::widget::Orientation::Vertical => (
+                header_rect.x,
+                header_rect.y + i as f32 * tab_h,
+              ),
+            };
+
+            let color = if i == *selected {
+              style.selected_color
+            } else {
+              style.unselected_color
+            };
+
+            ctx.primitives.draw_rect(
+              Vec2::new(
+                tx + tab_w * 0.5,
+                ty + tab_h * 0.5,
+              ),
+              Vec2::new(tab_w * 0.5, tab_h * 0.5),
+              Vec4::from(color),
+              [0.0; 4],
+              1.0,
+            );
+
+            ctx.text.draw(
+              ctx.device,
+              ctx.queue,
+              &tab.title,
+              Vec2::new(
+                tx + tab_w * 0.5,
+                ty + tab_h * 0.5,
+              ),
+              14.0,
+              Vec4::ONE,
+              HorizontalAlign::Center,
+              None,
+            );
+          }
         }
 
-        // Render Selected Content
+        // Render selected content.
         if let Some(tab) = tabs.get(*selected) {
-             render_widget(&tab.content, ctx);
+          render_widget(&tab.content, ctx);
         }
     }
   }
@@ -2056,6 +2307,22 @@ pub fn render_ui_with_state(
       Some(deferred_draws)
   );
   render_widget(widget, &mut ctx);
+
+  // Render queued overlays (e.g. expanded dropdowns).
+  while !ctx.overlay_queue.is_empty() {
+    let overlays: Vec<(Widget, Vec2)> =
+      ctx.overlay_queue.drain(..).collect();
+    for (mut overlay, abs_pos) in overlays {
+      let prev_offset = ctx.offset;
+      ctx.offset = abs_pos;
+      let b = overlay.bounds();
+      compute_layout(
+        &mut overlay, 0.0, 0.0, b.width, b.height,
+      );
+      render_widget(&overlay, &mut ctx);
+      ctx.offset = prev_offset;
+    }
+  }
 }
 
 /// Performs a hit test on the widget tree.
