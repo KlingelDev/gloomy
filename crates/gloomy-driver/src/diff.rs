@@ -278,8 +278,7 @@ fn widget_bounds(widget: &Widget) -> WidgetBounds {
     | Widget::ListView { bounds, .. }
     | Widget::Image { bounds, .. }
     | Widget::Icon { bounds, .. }
-    | Widget::Tab { bounds, .. }
-    | Widget::Chart { bounds, .. } => *bounds,
+    | Widget::Tab { bounds, .. } => *bounds,
     Widget::Label { x, y, width, height, .. } => {
       WidgetBounds {
         x: *x,
@@ -382,7 +381,6 @@ fn widget_type_name(widget: &Widget) -> &'static str {
     Widget::Slider { .. } => "Slider",
     Widget::Image { .. } => "Image",
     Widget::Icon { .. } => "Icon",
-    Widget::Chart { .. } => "Chart",
   }
 }
 

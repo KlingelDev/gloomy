@@ -416,17 +416,6 @@ fn dump_text_recursive(
         });
       }
     }
-    Widget::Chart { title, .. } if !title.is_empty() => {
-      entries.push(TextEntry {
-        text: title.clone(),
-        x: abs_x,
-        y: abs_y,
-        width: b.width,
-        height: b.height,
-        widget_id: id,
-        widget_type: wtype.to_string(),
-      });
-    }
     Widget::NumberInput { value, .. } => {
       entries.push(TextEntry {
         text: value.to_string(),
@@ -788,7 +777,6 @@ fn widget_id(widget: &Widget) -> Option<&str> {
     Widget::DataGrid { id, .. } => id.as_deref(),
     Widget::ListView { id, .. } => Some(id),
     Widget::Icon { id, .. } => Some(id),
-    Widget::Chart { id, .. } => id.as_deref(),
     Widget::Tree { id, .. } => id.as_deref(),
     _ => None,
   }
@@ -819,7 +807,6 @@ fn widget_type_name(widget: &Widget) -> &'static str {
     Widget::Slider { .. } => "Slider",
     Widget::Image { .. } => "Image",
     Widget::Icon { .. } => "Icon",
-    Widget::Chart { .. } => "Chart",
   }
 }
 
