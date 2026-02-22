@@ -1284,7 +1284,7 @@ impl Default for SliderStyle {
 fn default_text_color() -> Color { (0.9, 0.9, 0.95, 1.0) }
 fn default_placeholder_color() -> Color { (0.5, 0.5, 0.6, 1.0) }
 fn default_cursor_color() -> Color { (0.8, 0.8, 0.8, 1.0) }
-fn default_checkbox_checked() -> Color { (0.2, 0.2, 0.2, 1.0) }
+fn default_checkbox_checked() -> Color { (0.25, 0.47, 0.85, 1.0) }
 fn default_thumb_color() -> Color { (1.0, 1.0, 1.0, 1.0) }
 fn default_step() -> f64 { 1.0 }
 fn default_true() -> bool { true }
